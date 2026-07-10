@@ -125,7 +125,9 @@ def upload_annual_returns():
         for i, row in enumerate(reader, start=2):
             try:
                 year = int(row['year'])
-                return_pct = float(row['return'])
+                # Strip '%' sign and whitespace before converting to float
+                return_str = row['return'].replace('%', '').strip()
+                return_pct = float(return_str)
                 
                 cursor.execute("SELECT id FROM annual_returns WHERE year = ?", (year,))
                 existing = cursor.fetchone()

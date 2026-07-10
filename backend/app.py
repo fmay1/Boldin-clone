@@ -111,7 +111,8 @@ def upload_annual_returns():
         return jsonify({"error": "File must be a CSV"}), 400
         
     try:
-        content = file.read().decode('utf-8')
+        # Use utf-8-sig to automatically strip the Byte Order Mark (BOM) if present
+        content = file.read().decode('utf-8-sig')
         stream = io.StringIO(content, newline='')
         reader = csv.DictReader(stream)
         

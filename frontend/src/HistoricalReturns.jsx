@@ -79,7 +79,7 @@ function HistoricalReturns() {
 
       <form onSubmit={handleUpload} className="upload-area">
         <h3>Upload CSV</h3>
-        <p>CSV must have columns: <code>year</code>, <code>return</code></p>
+        <p>Expected CSV format: two columns named <code>year</code> and <code>return</code>. The header row should look like: <code>year,return</code></p>
         <input type="file" accept=".csv" onChange={handleFileChange} />
         <br />
         <button type="submit" disabled={!file}>Upload</button>

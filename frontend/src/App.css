@@ -4,6 +4,37 @@
   margin-top: 50px;
 }
 
+.nav {
+  display: flex;
+  justify-content: center;
+  gap: 10px;
+  margin-bottom: 20px;
+}
+
+.nav button {
+  padding: 10px 20px;
+  font-size: 16px;
+  cursor: pointer;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  background: #fff;
+}
+
+.nav button:hover {
+  background: #eee;
+}
+
+.nav button.active {
+  background: #ddd;
+  font-weight: bold;
+}
+
+.page-content {
+  max-width: 800px;
+  margin: 0 auto;
+  text-align: left;
+}
+
 .accounts-container {
   max-width: 800px;
   margin: 0 auto;
@@ -83,4 +114,54 @@ button:hover {
   padding: 10px;
   border-radius: 4px;
   margin-bottom: 10px;
+}
+
+/* Historical Returns Page Styles */
+.returns-container {
+  text-align: left;
+}
+
+.upload-area {
+  border: 2px dashed #ccc;
+  padding: 20px;
+  text-align: center;
+  margin-bottom: 20px;
+  border-radius: 8px;
+  background: #fafafa;
+}
+
+.preview-table {
+  margin-top: 20px;
+  max-height: 300px;
+  overflow-y: auto;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+}
+
+.preview-table table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.preview-table th, .preview-table td {
+  border: 1px solid #ddd;
+  padding: 8px;
+  text-align: left;
+}
+
+.preview-table th {
+  background: #f4f4f4;
+  position: sticky;
+  top: 0;
+  z-index: 1;
+}
+
+.error-list {
+  color: #b00020;
+  background: #ffe6e6;
+  padding: 10px;
+  border-radius: 4px;
+  margin-top: 10px;
+  max-height: 150px;
+  overflow-y: auto;
 }

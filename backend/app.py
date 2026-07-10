@@ -1,3 +1,5 @@
+import io
+import csv
 from flask import Flask, jsonify, request
 from database import init_db, get_connection
 
@@ -87,6 +89,68 @@ def delete_account(account_id):
     conn.commit()
     conn.close()
     return jsonify({"message": "Account deleted"})
+
+@app.route('/api/annual-returns', methods=['GET'])
+def get_annual_returns():
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT year, return_pct FROM annual_returns ORDER BY year")
+    rows = cursor.fetchall()
+    conn.close()
+    returns = [{"year": r[0], "return_pct": r[1]} for r in rows]
+    return jsonify(returns)
+
+@app.route('/api/annual-returns', methods=['POST'])
+def upload_annual_returns():
+    if 'file' not in request.files:
+        return jsonify({"error": "No file part"}), 400
+    file = request.files['file']
+    if file.filename == '':
+        return jsonify({"error": "No selected file"}), 400
+    if not file.filename.endswith('.csv'):
+        return jsonify({"error": "File must be a CSV"}), 400
+        
+    try:
+        content = file.read().decode('utf-8')
+        stream = io.StringIO(content, newline='')
+        reader = csv.DictReader(stream)
+        
+        conn = get_connection()
+        cursor = conn.cursor()
+        
+        added = 0
+        updated = 0
+        errors = []
+        
+        for i, row in enumerate(reader, start=2):
+            try:
+                year = int(row['year'])
+                return_pct = float(row['return'])
+                
+                cursor.execute("SELECT id FROM annual_returns WHERE year = ?", (year,))
+                existing = cursor.fetchone()
+                
+                if existing:
+                    cursor.execute("UPDATE annual_returns SET return_pct = ? WHERE year = ?", (return_pct, year))
+                    updated += 1
+                else:
+                    cursor.execute("INSERT INTO annual_returns (year, return_pct) VALUES (?, ?)", (year, return_pct))
+                    added += 1
+            except (ValueError, KeyError) as e:
+                errors.append(f"Row {i}: {str(e)}")
+                
+        conn.commit()
+        conn.close()
+        
+        return jsonify({
+            "message": "Upload successful",
+            "added": added,
+            "updated": updated,
+            "errors": errors
+        }), 200
+        
+    except Exception as e:
+        return jsonify({"error": f"Failed to process CSV: {str(e)}"}), 500
 
 if __name__ == '__main__':
     app.run(debug=True, port=5000)

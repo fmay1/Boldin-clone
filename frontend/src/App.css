@@ -3,3 +3,84 @@
   text-align: center;
   margin-top: 50px;
 }
+
+.accounts-container {
+  max-width: 800px;
+  margin: 0 auto;
+  text-align: left;
+}
+
+.account-form {
+  background: #f9f9f9;
+  padding: 20px;
+  border-radius: 8px;
+  margin-bottom: 20px;
+}
+
+.form-group {
+  margin-bottom: 10px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.form-group label {
+  width: 150px;
+  font-weight: bold;
+}
+
+.form-group input, .form-group select {
+  flex: 1;
+  padding: 8px;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+}
+
+button {
+  padding: 8px 16px;
+  margin-right: 10px;
+  cursor: pointer;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  background: #fff;
+}
+
+button:hover {
+  background: #eee;
+}
+
+.cancel-btn {
+  background: #ffcccc;
+}
+
+.accounts-list table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 10px;
+}
+
+.accounts-list th, .accounts-list td {
+  border: 1px solid #ddd;
+  padding: 8px;
+  text-align: left;
+}
+
+.accounts-list th {
+  background: #f4f4f4;
+}
+
+.error-message {
+  color: red;
+  background: #ffe6e6;
+  padding: 10px;
+  border-radius: 4px;
+  margin-bottom: 10px;
+}
+
+.success-message {
+  color: green;
+  background: #e6ffe6;
+  padding: 10px;
+  border-radius: 4px;
+  margin-bottom: 10px;
+}

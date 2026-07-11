@@ -40,8 +40,8 @@ Things the AI should avoid introducing unless explicitly approved:
 - User can input their own historical annual return data (1970–present or whatever range is uploaded), applied uniformly across the whole portfolio (single shared investment strategy)
 - User can set a withdrawal rule: before age 59.5, draw from post-tax accounts only; after 59.5, draw by a fixed percentage split (pre-tax/post-tax) that the user specifies
 - User can choose a return calculation mode per scenario:
-  - **Mean/stdev mode**: select a year range; project using that range's mean annual return, with a confidence band from its standard deviation
-  - **Historical replay mode**: select a starting year; replay that actual historical sequence of returns forward in order
+  - **Mean/stdev mode** (rolling-window historical simulation): select a range of eligible starting years; for each one, simulate the full projection using actual sequential historical returns from that starting point forward; then, for each forward year, take the mean and standard deviation across all simulations that reached that year, and show confidence bands from those. Full methodology in Section 4a.
+  - **Historical replay mode**: select a single starting year; replay that one actual historical sequence of returns forward in order
 - App runs a year-by-year projection of account balances from now through an end age (e.g. 95), using the selected return mode
 - Retirement expenses are entered as a flat annual number (today's dollars) and adjusted for inflation each year using a per-scenario inflation rate
 - If projected funds are depleted before end_age, balance floors at zero and a "funds depleted at age X" flag is shown
@@ -58,9 +58,37 @@ Things the AI should avoid introducing unless explicitly approved:
 
 **Scenario**
 - Purpose: Represents one retirement plan variant (e.g. "Retire at 55") that can be compared against others.
-- Fields: `id`, `name`, `current_age` (int), `retirement_age` (int), `end_age` (int), `expected_expenses_in_retirement` (number, annual, today's dollars), `withdrawal_split_pretax_pct` (0–100), `inflation_rate_pct` (number), `return_mode` (mean_stdev | historical_replay), `return_start_year` (int, used when return_mode = mean_stdev), `return_end_year` (int, used when return_mode = mean_stdev), `replay_start_year` (int, used when return_mode = historical_replay)
+- Fields: `id`, `name`, `current_age` (int), `retirement_age` (int), `end_age` (int), `expected_expenses_in_retirement` (number, annual, today's dollars), `withdrawal_split_pretax_pct` (0–100), `inflation_rate_pct` (number), `return_mode` (mean_stdev | historical_replay), `return_start_year` (int, required when return_mode = mean_stdev — the minimum year allowed as a simulation's starting year), `return_end_year` (int, optional when return_mode = mean_stdev — the maximum year allowed as a simulation's starting year; if left blank, defaults to the most recent year present in AnnualReturn data at calculation time), `replay_start_year` (int, used when return_mode = historical_replay — the single starting year for that one replayed sequence)
 - Relationships: None (all scenarios share the same Account records; a scenario doesn't own its own copy of accounts)
-- Validation rules: `current_age` < `retirement_age` < `end_age`, all positive integers; `withdrawal_split_pretax_pct` between 0–100; `inflation_rate_pct` within a sane range (e.g. -5 to 20, to catch typos); `return_start_year`/`return_end_year`/`replay_start_year` must fall within years actually present in AnnualReturn data
+- Validation rules: `current_age` < `retirement_age` < `end_age`, all positive integers; `withdrawal_split_pretax_pct` between 0–100; `inflation_rate_pct` within a sane range (e.g. -5 to 20, to catch typos); `return_start_year`, `return_end_year` (if provided), and `replay_start_year` must fall within years actually present in AnnualReturn data; if both `return_start_year` and `return_end_year` are provided, `return_start_year` ≤ `return_end_year`
+
+## 4a. Mean/Stdev Return Mode — Calculation Methodology
+
+This is a rolling-window historical simulation, not a simple flat-average projection. It must be implemented exactly as follows, since it needs to match the user's existing spreadsheet:
+
+**Step 1 — Determine eligible starting years.**
+Let `last_data_year` = the most recent year present in `AnnualReturn`. Eligible starting years are every year S in `AnnualReturn` where `return_start_year` ≤ S ≤ (`return_end_year` if set, otherwise `last_data_year`).
+
+**Step 2 — Run one simulation per eligible starting year.**
+For each eligible starting year S:
+- Initialize simulation balances from the scenario's current accounts, tracked as two running subtotals: post-tax and pre-tax (both needed separately because of the withdrawal rule below; both grow at the same rate since one return series applies to the whole portfolio).
+- Let `years_until_retirement` = `retirement_age` − `current_age`, and `projection_horizon` = `end_age` − `current_age`.
+- For each forward year offset n = 1, 2, 3, ... up to `projection_horizon`:
+  1. The historical year this offset maps to for this simulation is `S + n − 1`. If that year is greater than `last_data_year`, this simulation stops here — it has no data to continue, and does not contribute to offset n or any later offset.
+  2. **Contribution/withdrawal is applied first, before growth:**
+     - If n ≤ `years_until_retirement` (pre-retirement): add each account's `annual_contribution` to the matching (post-tax/pre-tax) subtotal.
+     - If n > `years_until_retirement` (post-retirement): calculate that year's withdrawal need as `expected_expenses_in_retirement` inflated by `inflation_rate_pct`, compounded for n years. If the age at this offset (`current_age + n`) is under 59.5, withdraw the full amount from the post-tax subtotal only. If 59.5 or over, split the withdrawal between subtotals per `withdrawal_split_pretax_pct`. If a subtotal is insufficient, floor it at zero rather than going negative (see Section 10).
+  3. **Then apply growth:** grow both subtotals by that year's actual historical return (`return_pct` for year `S + n − 1` in `AnnualReturn`).
+  4. Record the combined (post-tax + pre-tax) ending balance for this simulation at offset n.
+
+**Step 3 — Aggregate across simulations, per forward year.**
+For each offset n = 1 to `projection_horizon`:
+- Collect the ending balance at offset n from every simulation that had enough data to reach it (i.e., every eligible S where `S + n − 1` ≤ `last_data_year`).
+- Compute the mean and standard deviation of that set of balances.
+- Compute confidence bands using z-scores (standard values, assumed unless corrected): 50% CI ≈ mean ± 0.674×stdev, 70% CI ≈ mean ± 1.036×stdev, 95% CI ≈ mean ± 1.96×stdev.
+
+**Step 4 — Handle insufficient data.**
+If, for some offsets near the end of `projection_horizon`, no simulation has enough data to reach that far, the app should: (a) show a warning before/alongside the results explaining that the selected starting-year range doesn't cover the full projection horizon, and (b) still render the chart/table for whatever offsets do have at least one simulation, rather than blocking the whole result.
 
 **AnnualReturn**
 - Purpose: Stores the user's actual historical annual returns for their investment strategy, uploaded via CSV.
@@ -144,7 +172,8 @@ Given this stack (Python/Flask, React, SQLite), the following should never be co
 
 **Flow 4: Viewing/comparing results**
 1. From the Scenarios list, select one or more scenarios to view
-2. App calls the backend, which runs the projection fresh for each selected scenario (contributions until retirement → withdrawals after, per the 59.5 rule and account type → returns applied per the chosen mode)
+2. App calls the backend, which runs the projection fresh for each selected scenario. For mean/stdev mode, this means running the full rolling-window simulation described in Section 4a (one simulation per eligible starting year, aggregated per forward year into mean + confidence bands). For historical replay mode, it means the single replayed sequence. Either way: contributions until retirement → withdrawals after, per the 59.5 rule and account type.
+2a. If mean/stdev mode can't cover the full projection horizon with available data, a warning is shown alongside the results (see Section 4a, Step 4), and the chart/table simply stops wherever data runs out.
 3. Results shown as a chart (balance over time, one line per scenario) and a table
 4. If mean/stdev mode, chart also shows a shaded confidence band
 5. Contributions stop and withdrawals begin automatically once `retirement_age` is reached, driven by the projection logic (not stored as separate account data)
@@ -157,6 +186,8 @@ Given this stack (Python/Flask, React, SQLite), the following should never be co
 - No accounts exist yet when viewing a projection → clear message directing user to add an account, not a blank/broken chart
 - No historical return data uploaded yet when viewing a projection → clear message, not a silent failure or crash
 - Selected year range (mean/stdev mode) or replay start year (historical replay mode) falls outside years present in `annual_returns` → validation error stating the valid available range
+- `return_start_year` > `return_end_year` (mean/stdev mode, when both are provided) → validation error, not saved
+- Mean/stdev mode: no eligible starting year has enough historical data to cover the full projection horizon (`end_age` − `current_age` years) → warn before/alongside results, then still show the chart/table for whatever forward years do have at least one simulation reaching them (per Section 4a, Step 4)
 - `withdrawal_split_pretax_pct` outside 0–100 → validation error
 - Funds depleted before `end_age` → balance floors at zero for remaining years, with a "funds depleted at age X" flag shown in results
 
@@ -204,7 +235,7 @@ Unless there's a specific, stated reason otherwise:
 2. **Accounts CRUD** — Backend API routes to create/read/update/delete `Account` records; React "Accounts" page to add, view, edit, delete accounts, with Section 4 validation rules enforced. Basic, reasonable styling included (not bare HTML, not a full design pass).
 3. **Historical returns upload** — Backend route to accept CSV upload, parse it, merge into `annual_returns` (overwrite on duplicate year), with malformed-row handling per Section 10. React "Historical Returns" page with upload UI and confirmation/preview table. Basic styling included.
 4. **Scenario CRUD** — Backend API routes for `Scenario` records; React "Scenarios" page to create/edit/delete scenarios with all Section 4 fields, validation rules enforced (age ordering, percentage bounds, year range must exist in `annual_returns`). Basic styling included.
-5. **Core projection engine (mean/stdev mode only)** — `projection.py` logic: year-by-year loop applying contributions pre-retirement, the 59.5 withdrawal rule post-retirement, inflation-adjusted expenses, mean-return + stdev-band calculation from a selected year range. Floors at zero on depletion, flags depletion age. Exposed via backend API route; not yet wired to frontend (backend only, no UI styling concerns).
+5. **Core projection engine (mean/stdev mode only)** — `projection.py` logic implementing the full rolling-window historical simulation from Section 4a: one simulation per eligible starting year, contributions/withdrawals applied before growth each year, aggregated per forward year into mean + z-score confidence bands (50%/70%/95%). Floors at zero on depletion, flags depletion age, warns if data can't cover the full projection horizon. Exposed via backend API route; not yet wired to frontend (backend only, no UI styling concerns).
 6. **Results view (single scenario, mean/stdev mode)** — React "Results" page calling the projection API for one scenario, rendering a chart (Recharts, with confidence band) and a table. Basic styling included.
 7. **Historical replay mode** — Add the second return calculation mode to `projection.py` (replay actual historical sequence from a chosen start year), selectable per scenario, reflected in the Results view.
 8. **Multi-scenario comparison** — Extend the Results view to select multiple scenarios and see them overlaid/side-by-side (chart + table). Basic styling included.
@@ -227,6 +258,11 @@ None currently — everything raised during planning was resolved into a decisio
 - Pulled multiple accounts and scenario comparison forward into MVP (originally Tier 2) since they're core to actual usability for someone near retirement.
 - Deferred true tax-optimized withdrawal ordering to Tier 2/3, in favor of a fixed, user-specified pre/post-tax percentage split for v1 (isolated for easy future replacement).
 - Deferred full Monte Carlo simulation to Tier 2/3, in favor of two simpler v1 modes: mean/stdev-based projection with a confidence band, and historical replay of an actual return sequence.
+- Replaced the originally-planned "single flat mean return + stdev of annual returns" calculation with a rolling-window historical simulation (Section 4a), to match the user's existing spreadsheet methodology: one simulation per eligible historical starting year, aggregated per forward year into a mean and confidence bands.
+- `return_end_year` (max eligible starting year, mean/stdev mode) made optional, defaulting to the most recent uploaded data year, since the primary use case is excluding old years (e.g. the 1970s/80s), not excluding recent ones.
+- Contribution/withdrawal is applied before that year's growth, not after — matches the user's spreadsheet convention.
+- Withdrawals are calculated and applied once per year (at the start, before growth), even though real-world withdrawals happen bi-monthly — annual return data doesn't support meaningful sub-year timing, so bi-monthly withdrawal timing was simplified away for v1 (noted here in case it's revisited later).
+- Confidence interval z-scores (0.674 / 1.036 / 1.96 for 50%/70%/95% CI) are an assumption based on standard statistical convention for a normal distribution — not explicitly confirmed against the user's spreadsheet formulas, so worth double-checking against actual output once built.
 
 ## 17. Success Criteria
 
@@ -252,6 +288,9 @@ None currently — everything raised during planning was resolved into a decisio
 - [ ] Set up a scenario deliberately designed to deplete funds early — balance floors at zero, "funds depleted at age X" is shown
 - [ ] Try to view a projection with no accounts entered — clear message shown, not a crash/blank screen
 - [ ] Try to view a projection with no historical return data uploaded — clear message shown, not a crash
+- [ ] For a scenario in mean/stdev mode, manually hand-calculate the mean and stdev at year 1 (a small, checkable case) and confirm the app's output matches
+- [ ] Set `return_start_year` close to the most recent data year with a long projection horizon — confirm the app warns that not all years are covered, and still shows results through whatever years are covered
+- [ ] Leave `return_end_year` blank in mean/stdev mode — confirm it defaults to the most recent uploaded year rather than erroring
 
 ## 19. What I Should Be Able to Explain Afterward
 

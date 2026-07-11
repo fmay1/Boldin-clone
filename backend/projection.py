@@ -92,45 +92,56 @@ def run_projection(scenario_id):
             if historical_year > last_data_year:
                 break
                 
-            # Step 3c: Contributions or Withdrawals (applied before growth)
-            if n <= years_until_retirement:
-                post_tax += contrib_post_tax
-                pretax += contrib_pretax
-            else:
-                age = current_age + n
-                withdrawal_need = expenses * ((1 + inflation_rate) ** n)
-                
-                if age < 59.5:
-                    if post_tax >= withdrawal_need:
-                        post_tax -= withdrawal_need
-                    else:
-                        # Fallback to pretax
-                        shortfall = withdrawal_need - post_tax
-                        post_tax = 0.0
-                        if pretax >= shortfall:
-                            pretax -= shortfall
-                        else:
-                            pretax = 0.0
-                        if early_pretax_access_age is None:
-                            early_pretax_access_age = age
-                else:
-                    # Split withdrawal by percentage
-                    pretax_withdrawal = withdrawal_need * (withdrawal_split_pretax_pct / 100.0)
-                    posttax_withdrawal = withdrawal_need * (1.0 - withdrawal_split_pretax_pct / 100.0)
-                    
-                    pretax -= min(pretax_withdrawal, pretax)
-                    post_tax -= min(posttax_withdrawal, post_tax)
-                    
-            # Step 3d: Apply growth from actual historical return
+            # 1. Get annual return and convert to monthly rate (geometric)
             ret_pct = returns_by_year[historical_year] / 100.0
-            post_tax *= (1 + ret_pct)
-            pretax *= (1 + ret_pct)
+            monthly_rate = (1 + ret_pct) ** (1/12) - 1
             
-            # Floor at zero
-            post_tax = max(0.0, post_tax)
-            pretax = max(0.0, pretax)
+            # 2. Determine phase and monthly amounts
+            is_pre_retirement = n <= years_until_retirement
+            age = current_age + n
             
-            # Step 3e: Record balances for this offset
+            if is_pre_retirement:
+                monthly_contrib_post = contrib_post_tax / 12.0
+                monthly_contrib_pretax = contrib_pretax / 12.0
+            else:
+                annual_withdrawal = expenses * ((1 + inflation_rate) ** n)
+                monthly_withdrawal = annual_withdrawal / 12.0
+            
+            # 3. Run 12 monthly iterations
+            for _ in range(12):
+                # a. Grow balances by monthly rate
+                post_tax *= (1 + monthly_rate)
+                pretax *= (1 + monthly_rate)
+                
+                # b. Apply contribution or withdrawal
+                if is_pre_retirement:
+                    post_tax += monthly_contrib_post
+                    pretax += monthly_contrib_pretax
+                else:
+                    if age < 59.5:
+                        if post_tax >= monthly_withdrawal:
+                            post_tax -= monthly_withdrawal
+                        else:
+                            shortfall = monthly_withdrawal - post_tax
+                            post_tax = 0.0
+                            if pretax >= shortfall:
+                                pretax -= shortfall
+                            else:
+                                pretax = 0.0
+                            if early_pretax_access_age is None:
+                                early_pretax_access_age = age
+                    else:
+                        pretax_withdrawal = monthly_withdrawal * (withdrawal_split_pretax_pct / 100.0)
+                        posttax_withdrawal = monthly_withdrawal * (1.0 - withdrawal_split_pretax_pct / 100.0)
+                        
+                        pretax -= min(pretax_withdrawal, pretax)
+                        post_tax -= min(posttax_withdrawal, post_tax)
+                
+                # Floor at zero
+                post_tax = max(0.0, post_tax)
+                pretax = max(0.0, pretax)
+            
+            # Record balances for this offset
             results_by_offset[n].append({
                 "combined": post_tax + pretax,
                 "post_tax": post_tax,

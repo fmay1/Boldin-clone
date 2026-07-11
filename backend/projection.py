@@ -74,10 +74,14 @@ def run_projection(scenario_id):
     contrib_post_tax = sum(a['annual_contribution'] for a in accounts if a['type'] == 'post-tax')
     contrib_pretax = sum(a['annual_contribution'] for a in accounts if a['type'] == 'pre-tax')
     
+    # Track earliest age across all simulations where early pre-tax access occurred
+    min_early_access_age = None
+    
     # Run one simulation per eligible starting year
     for S in eligible_years:
         post_tax = initial_post_tax
         pretax = initial_pretax
+        early_pretax_access_age = None
         
         for n in range(1, projection_horizon + 1):
             historical_year = S + n - 1
@@ -95,9 +99,18 @@ def run_projection(scenario_id):
                 withdrawal_need = expenses * ((1 + inflation_rate) ** n)
                 
                 if age < 59.5:
-                    # Withdraw only from post-tax
-                    withdraw = min(withdrawal_need, post_tax)
-                    post_tax -= withdraw
+                    if post_tax >= withdrawal_need:
+                        post_tax -= withdrawal_need
+                    else:
+                        # Fallback to pretax
+                        shortfall = withdrawal_need - post_tax
+                        post_tax = 0.0
+                        if pretax >= shortfall:
+                            pretax -= shortfall
+                        else:
+                            pretax = 0.0
+                        if early_pretax_access_age is None:
+                            early_pretax_access_age = age
                 else:
                     # Split withdrawal by percentage
                     pretax_withdrawal = withdrawal_need * (withdrawal_split_pretax_pct / 100.0)
@@ -117,6 +130,11 @@ def run_projection(scenario_id):
             
             # Step 3e: Record combined balance for this offset
             results_by_offset[n].append(post_tax + pretax)
+            
+        # After simulation finishes, check if it triggered early access
+        if early_pretax_access_age is not None:
+            if min_early_access_age is None or early_pretax_access_age < min_early_access_age:
+                min_early_access_age = early_pretax_access_age
             
     # Step 4: Aggregate across simulations per offset
     final_results = []
@@ -157,7 +175,13 @@ def run_projection(scenario_id):
     if max_covered_offset < projection_horizon:
         warning = f"Selected starting-year range doesn't cover the full projection horizon. Results shown only through age {current_age + max_covered_offset}."
         
+    # Step 6: Warning for early pre-tax access
+    early_access_warning = None
+    if min_early_access_age is not None:
+        early_access_warning = f"In at least one historical scenario, pre-tax funds were accessed before age 59.5 because post-tax funds ran out, starting at age {min_early_access_age}."
+        
     return {
         "results": final_results,
-        "warning": warning
+        "warning": warning,
+        "early_access_warning": early_access_warning
     }

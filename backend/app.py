@@ -222,8 +222,8 @@ def create_scenario():
     # Validate year ranges against annual_returns
     if return_mode == 'mean_stdev':
         start_year = int(data['return_start_year'])
-        end_year = int(data['return_end_year'])
-        if start_year > end_year:
+        end_year = int(data['return_end_year']) if data.get('return_end_year') is not None else None
+        if start_year is not None and end_year is not None and start_year > end_year:
             conn.close()
             return jsonify({"error": "Return start year must be <= end year"}), 400
             
@@ -234,7 +234,7 @@ def create_scenario():
             conn.close()
             return jsonify({"error": "No annual return data available"}), 400
             
-        if start_year < min_year or end_year > max_year:
+        if start_year < min_year or (end_year is not None and end_year > max_year):
             conn.close()
             return jsonify({"error": f"Return year range must be within {min_year}-{max_year}"}), 400
             
@@ -305,8 +305,8 @@ def update_scenario(scenario_id):
 
     if return_mode == 'mean_stdev':
         start_year = int(data['return_start_year'])
-        end_year = int(data['return_end_year'])
-        if start_year > end_year:
+        end_year = int(data['return_end_year']) if data.get('return_end_year') is not None else None
+        if start_year is not None and end_year is not None and start_year > end_year:
             conn.close()
             return jsonify({"error": "Return start year must be <= end year"}), 400
             
@@ -317,7 +317,7 @@ def update_scenario(scenario_id):
             conn.close()
             return jsonify({"error": "No annual return data available"}), 400
             
-        if start_year < min_year or end_year > max_year:
+        if start_year < min_year or (end_year is not None and end_year > max_year):
             conn.close()
             return jsonify({"error": f"Return year range must be within {min_year}-{max_year}"}), 400
             

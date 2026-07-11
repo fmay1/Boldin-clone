@@ -114,7 +114,7 @@ function Results() {
             </ResponsiveContainer>
           </div>
 
-          <div style={{ overflowX: 'auto' }}>
+          <div>
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '14px' }}>
               <thead>
                 <tr style={{ borderBottom: '2px solid #ddd' }}>

@@ -76,6 +76,8 @@ def run_projection(scenario_id):
     
     # Track earliest age across all simulations where early pre-tax access occurred
     min_early_access_age = None
+    early_access_count = 0
+    total_simulations = len(eligible_years)
     
     # Run one simulation per eligible starting year
     for S in eligible_years:
@@ -137,6 +139,7 @@ def run_projection(scenario_id):
             
         # After simulation finishes, check if it triggered early access
         if early_pretax_access_age is not None:
+            early_access_count += 1
             if min_early_access_age is None or early_pretax_access_age < min_early_access_age:
                 min_early_access_age = early_pretax_access_age
             
@@ -191,7 +194,8 @@ def run_projection(scenario_id):
     # Step 6: Warning for early pre-tax access
     early_access_warning = None
     if min_early_access_age is not None:
-        early_access_warning = f"In at least one historical scenario, pre-tax funds were accessed before age 59.5 because post-tax funds ran out, starting at age {min_early_access_age}."
+        pct = (early_access_count / total_simulations) * 100
+        early_access_warning = f"In {early_access_count} out of {total_simulations} historical scenarios ({pct:.1f}%), pre-tax funds were accessed before age 59.5 because post-tax funds ran out, starting as early as age {min_early_access_age}."
         
     return {
         "results": final_results,

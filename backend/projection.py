@@ -62,11 +62,13 @@ def run_projection(scenario_id):
     if not eligible_years:
         return {"error": "No return data found in the selected year range."}, 400
         
-    years_until_retirement = retirement_age - current_age
-    projection_horizon = end_age - current_age
+    # Convert ages to months for precise monthly simulation (per Section 4a)
+    retirement_month = round((retirement_age - current_age) * 12)
+    total_months = int((end_age - current_age) * 12)
+    max_year_offset = math.ceil(end_age - current_age)
     
     # Storage for simulation results per forward year offset
-    results_by_offset = {n: [] for n in range(1, projection_horizon + 1)}
+    results_by_offset = {n: [] for n in range(1, max_year_offset + 1)}
     
     # Pre-calculate initial balances and contributions by account type
     initial_post_tax = sum(a['current_balance'] for a in accounts if a['type'] == 'post-tax')
@@ -85,8 +87,8 @@ def run_projection(scenario_id):
         pretax = initial_pretax
         early_pretax_access_age = None
         
-        for n in range(1, projection_horizon + 1):
-            historical_year = S + n - 1
+        for m in range(1, total_months + 1):
+            historical_year = S + (m - 1) // 12
             
             # Stop simulation if we run out of historical data
             if historical_year > last_data_year:
@@ -97,56 +99,59 @@ def run_projection(scenario_id):
             monthly_rate = (1 + ret_pct) ** (1/12) - 1
             
             # 2. Determine phase and monthly amounts
-            is_pre_retirement = n <= years_until_retirement
-            age = current_age + n
+            is_pre_retirement = m <= retirement_month
+            age_this_month = current_age + (m - 1) / 12.0
             
             if is_pre_retirement:
                 monthly_contrib_post = contrib_post_tax / 12.0
                 monthly_contrib_pretax = contrib_pretax / 12.0
             else:
-                annual_withdrawal = expenses * ((1 + inflation_rate) ** n)
+                years_elapsed = (m - 1) / 12.0
+                annual_withdrawal = expenses * ((1 + inflation_rate) ** years_elapsed)
                 monthly_withdrawal = annual_withdrawal / 12.0
             
-            # 3. Run 12 monthly iterations
-            for _ in range(12):
-                # a. Grow balances by monthly rate
-                post_tax *= (1 + monthly_rate)
-                pretax *= (1 + monthly_rate)
-                
-                # b. Apply contribution or withdrawal
-                if is_pre_retirement:
-                    post_tax += monthly_contrib_post
-                    pretax += monthly_contrib_pretax
-                else:
-                    if age < 59.5:
-                        if post_tax >= monthly_withdrawal:
-                            post_tax -= monthly_withdrawal
-                        else:
-                            shortfall = monthly_withdrawal - post_tax
-                            post_tax = 0.0
-                            if pretax >= shortfall:
-                                pretax -= shortfall
-                            else:
-                                pretax = 0.0
-                            if early_pretax_access_age is None:
-                                early_pretax_access_age = age
-                    else:
-                        pretax_withdrawal = monthly_withdrawal * (withdrawal_split_pretax_pct / 100.0)
-                        posttax_withdrawal = monthly_withdrawal * (1.0 - withdrawal_split_pretax_pct / 100.0)
-                        
-                        pretax -= min(pretax_withdrawal, pretax)
-                        post_tax -= min(posttax_withdrawal, post_tax)
-                
-                # Floor at zero
-                post_tax = max(0.0, post_tax)
-                pretax = max(0.0, pretax)
+            # 3. Run monthly iteration
+            # a. Grow balances by monthly rate
+            post_tax *= (1 + monthly_rate)
+            pretax *= (1 + monthly_rate)
             
-            # Record balances for this offset
-            results_by_offset[n].append({
-                "combined": post_tax + pretax,
-                "post_tax": post_tax,
-                "pretax": pretax
-            })
+            # b. Apply contribution or withdrawal
+            if is_pre_retirement:
+                post_tax += monthly_contrib_post
+                pretax += monthly_contrib_pretax
+            else:
+                if age_this_month < 59.5:
+                    if post_tax >= monthly_withdrawal:
+                        post_tax -= monthly_withdrawal
+                    else:
+                        shortfall = monthly_withdrawal - post_tax
+                        post_tax = 0.0
+                        if pretax >= shortfall:
+                            pretax -= shortfall
+                        else:
+                            pretax = 0.0
+                        if early_pretax_access_age is None:
+                            early_pretax_access_age = age_this_month
+                else:
+                    pretax_withdrawal = monthly_withdrawal * (withdrawal_split_pretax_pct / 100.0)
+                    posttax_withdrawal = monthly_withdrawal * (1.0 - withdrawal_split_pretax_pct / 100.0)
+                    
+                    pretax -= min(pretax_withdrawal, pretax)
+                    post_tax -= min(posttax_withdrawal, post_tax)
+            
+            # Floor at zero
+            post_tax = max(0.0, post_tax)
+            pretax = max(0.0, pretax)
+            
+            # Record balances at end of each year or last month
+            if m % 12 == 0 or m == total_months:
+                year_offset = (m + 11) // 12
+                if year_offset in results_by_offset:
+                    results_by_offset[year_offset].append({
+                        "combined": post_tax + pretax,
+                        "post_tax": post_tax,
+                        "pretax": pretax
+                    })
             
         # After simulation finishes, check if it triggered early access
         if early_pretax_access_age is not None:
@@ -159,7 +164,7 @@ def run_projection(scenario_id):
     max_covered_offset = 0
     warning = None
     
-    for n in range(1, projection_horizon + 1):
+    for n in range(1, max_year_offset + 1):
         vals = results_by_offset[n]
         # Require at least 5 simulations to report a statistically meaningful data point
         if len(vals) < 5:
@@ -200,7 +205,7 @@ def run_projection(scenario_id):
         })
         
     # Step 5: Warning if horizon not fully covered (due to data limits or <5 simulations)
-    if max_covered_offset < projection_horizon:
+    if max_covered_offset < max_year_offset:
         warning = f"Selected starting-year range doesn't cover the full projection horizon. Results shown only through age {current_age + max_covered_offset}."
         
     # Step 6: Warning for early pre-tax access

@@ -41,7 +41,13 @@
   text-align: left;
 }
 
-.account-form {
+.scenarios-container {
+  max-width: 800px;
+  margin: 0 auto;
+  text-align: left;
+}
+
+.account-form, .scenario-form {
   background: #f9f9f9;
   padding: 20px;
   border-radius: 8px;
@@ -84,19 +90,19 @@ button:hover {
   background: #ffcccc;
 }
 
-.accounts-list table {
+.accounts-list table, .scenarios-list table {
   width: 100%;
   border-collapse: collapse;
   margin-top: 10px;
 }
 
-.accounts-list th, .accounts-list td {
+.accounts-list th, .accounts-list td, .scenarios-list th, .scenarios-list td {
   border: 1px solid #ddd;
   padding: 8px;
   text-align: left;
 }
 
-.accounts-list th {
+.accounts-list th, .scenarios-list th {
   background: #f4f4f4;
 }
 

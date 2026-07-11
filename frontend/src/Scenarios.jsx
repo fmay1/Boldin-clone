@@ -34,6 +34,12 @@ function Scenarios() {
   const [editReturnEndYear, setEditReturnEndYear] = useState('')
   const [editReplayStartYear, setEditReplayStartYear] = useState('')
 
+  const isValidMonthlyPrecision = (val) => {
+    const num = parseFloat(val)
+    if (isNaN(num)) return false
+    return Math.abs((num * 12) - Math.round(num * 12)) < 1e-9
+  }
+
   const fetchScenarios = async () => {
     try {
       const res = await fetch('/api/scenarios')
@@ -83,6 +89,15 @@ function Scenarios() {
     e.preventDefault()
     setError('')
     setSuccess('')
+    
+    if (!isValidMonthlyPrecision(currentAge)) {
+      setError('Current age must correspond to a whole number of months (e.g., 46.25)')
+      return
+    }
+    if (!isValidMonthlyPrecision(retirementAge)) {
+      setError('Retirement age must correspond to a whole number of months (e.g., 46.25)')
+      return
+    }
     
     const payload = {
       name: name.trim(),
@@ -135,6 +150,15 @@ function Scenarios() {
     e.preventDefault()
     setError('')
     setSuccess('')
+
+    if (!isValidMonthlyPrecision(editCurrentAge)) {
+      setError('Current age must correspond to a whole number of months (e.g., 46.25)')
+      return
+    }
+    if (!isValidMonthlyPrecision(editRetirementAge)) {
+      setError('Retirement age must correspond to a whole number of months (e.g., 46.25)')
+      return
+    }
 
     const payload = {
       name: editName.trim(),
@@ -201,6 +225,7 @@ function Scenarios() {
           <label>Current Age:</label>
           <input 
             type="number" 
+            step="0.01" 
             value={editingId ? editCurrentAge : currentAge} 
             onChange={(e) => editingId ? setEditCurrentAge(e.target.value) : setCurrentAge(e.target.value)} 
             required 
@@ -210,6 +235,7 @@ function Scenarios() {
           <label>Retirement Age:</label>
           <input 
             type="number" 
+            step="0.01" 
             value={editingId ? editRetirementAge : retirementAge} 
             onChange={(e) => editingId ? setEditRetirementAge(e.target.value) : setRetirementAge(e.target.value)} 
             required 

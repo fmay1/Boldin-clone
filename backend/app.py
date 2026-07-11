@@ -196,8 +196,8 @@ def create_scenario():
         return jsonify({"error": "Name is required"}), 400
     
     try:
-        current_age = int(data['current_age'])
-        retirement_age = int(data['retirement_age'])
+        current_age = float(data['current_age'])
+        retirement_age = float(data['retirement_age'])
         end_age = int(data['end_age'])
         expenses = float(data['expected_expenses_in_retirement'])
         withdrawal_split = float(data['withdrawal_split_pretax_pct'])
@@ -206,6 +206,14 @@ def create_scenario():
     except (ValueError, TypeError):
         conn.close()
         return jsonify({"error": "Invalid numeric values for ages, expenses, or rates"}), 400
+
+    # Validate monthly precision for current_age and retirement_age
+    if abs((current_age * 12) - round(current_age * 12)) > 1e-9:
+        conn.close()
+        return jsonify({"error": "Current age must correspond to a whole number of months (e.g., 46.25)"}), 400
+    if abs((retirement_age * 12) - round(retirement_age * 12)) > 1e-9:
+        conn.close()
+        return jsonify({"error": "Retirement age must correspond to a whole number of months (e.g., 46.25)"}), 400
 
     if current_age >= retirement_age or retirement_age >= end_age:
         conn.close()
@@ -280,8 +288,8 @@ def update_scenario(scenario_id):
         return jsonify({"error": "Name is required"}), 400
     
     try:
-        current_age = int(data['current_age'])
-        retirement_age = int(data['retirement_age'])
+        current_age = float(data['current_age'])
+        retirement_age = float(data['retirement_age'])
         end_age = int(data['end_age'])
         expenses = float(data['expected_expenses_in_retirement'])
         withdrawal_split = float(data['withdrawal_split_pretax_pct'])
@@ -290,6 +298,14 @@ def update_scenario(scenario_id):
     except (ValueError, TypeError):
         conn.close()
         return jsonify({"error": "Invalid numeric values for ages, expenses, or rates"}), 400
+
+    # Validate monthly precision for current_age and retirement_age
+    if abs((current_age * 12) - round(current_age * 12)) > 1e-9:
+        conn.close()
+        return jsonify({"error": "Current age must correspond to a whole number of months (e.g., 46.25)"}), 400
+    if abs((retirement_age * 12) - round(retirement_age * 12)) > 1e-9:
+        conn.close()
+        return jsonify({"error": "Retirement age must correspond to a whole number of months (e.g., 46.25)"}), 400
 
     if current_age >= retirement_age or retirement_age >= end_age:
         conn.close()

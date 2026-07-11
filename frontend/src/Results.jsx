@@ -9,6 +9,7 @@ function Results() {
   const [error, setError] = useState('')
   const [warning, setWarning] = useState('')
   const [earlyAccessWarning, setEarlyAccessWarning] = useState('')
+  const [refresh, setRefresh] = useState(0)
 
   // Fetch available scenarios on mount
   useEffect(() => {
@@ -18,8 +19,7 @@ function Results() {
       .catch(err => setError('Failed to load scenarios'))
   }, [])
 
-  // Fetch projection when a scenario is selected
-  useEffect(() => {
+  const fetchProjection = async () => {
     if (!selectedScenarioId) {
       setResults([])
       setError('')
@@ -34,20 +34,26 @@ function Results() {
     setEarlyAccessWarning('')
     setResults([])
     
-    fetch(`/api/projection/${selectedScenarioId}`)
-      .then(res => res.json())
-      .then(data => {
-        if (data.error) {
-          setError(data.error)
-        } else {
-          setResults(data.results || [])
-          if (data.warning) setWarning(data.warning)
-          if (data.early_access_warning) setEarlyAccessWarning(data.early_access_warning)
-        }
-      })
-      .catch(err => setError('Failed to fetch projection'))
-      .finally(() => setLoading(false))
-  }, [selectedScenarioId])
+    try {
+      const res = await fetch(`/api/projection/${selectedScenarioId}`)
+      const data = await res.json()
+      if (data.error) {
+        setError(data.error)
+      } else {
+        setResults(data.results || [])
+        if (data.warning) setWarning(data.warning)
+        if (data.early_access_warning) setEarlyAccessWarning(data.early_access_warning)
+      }
+    } catch (err) {
+      setError('Failed to fetch projection')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    fetchProjection()
+  }, [selectedScenarioId, refresh])
 
   const formatCurrency = (val) => {
     return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(val)
@@ -57,8 +63,8 @@ function Results() {
     <div className="results-container" style={{ padding: '20px' }}>
       <h2>Projection Results</h2>
       
-      <div style={{ marginBottom: '20px' }}>
-        <label htmlFor="scenario-select" style={{ marginRight: '10px', fontWeight: 'bold' }}>Select Scenario:</label>
+      <div style={{ marginBottom: '20px', display: 'flex', alignItems: 'center', gap: '10px' }}>
+        <label htmlFor="scenario-select" style={{ fontWeight: 'bold' }}>Select Scenario:</label>
         <select 
           id="scenario-select" 
           value={selectedScenarioId} 
@@ -70,6 +76,13 @@ function Results() {
             <option key={s.id} value={s.id}>{s.name}</option>
           ))}
         </select>
+        <button 
+          onClick={() => setRefresh(r => r + 1)} 
+          disabled={loading || !selectedScenarioId}
+          style={{ padding: '8px 12px', fontSize: '14px', cursor: loading ? 'not-allowed' : 'pointer' }}
+        >
+          {loading ? 'Loading...' : 'Refresh'}
+        </button>
       </div>
 
       {error && <div style={{ color: '#721c24', backgroundColor: '#f8d7da', padding: '10px', borderRadius: '4px', marginBottom: '15px' }}>{error}</div>}

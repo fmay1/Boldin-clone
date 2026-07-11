@@ -150,7 +150,8 @@ def run_projection(scenario_id):
     
     for n in range(1, projection_horizon + 1):
         vals = results_by_offset[n]
-        if not vals:
+        # Require at least 5 simulations to report a statistically meaningful data point
+        if len(vals) < 5:
             break
             
         max_covered_offset = n
@@ -187,7 +188,7 @@ def run_projection(scenario_id):
             "ci95_high": ci95_high
         })
         
-    # Step 5: Warning if horizon not fully covered
+    # Step 5: Warning if horizon not fully covered (due to data limits or <5 simulations)
     if max_covered_offset < projection_horizon:
         warning = f"Selected starting-year range doesn't cover the full projection horizon. Results shown only through age {current_age + max_covered_offset}."
         

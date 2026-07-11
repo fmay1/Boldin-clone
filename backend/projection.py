@@ -128,8 +128,12 @@ def run_projection(scenario_id):
             post_tax = max(0.0, post_tax)
             pretax = max(0.0, pretax)
             
-            # Step 3e: Record combined balance for this offset
-            results_by_offset[n].append(post_tax + pretax)
+            # Step 3e: Record balances for this offset
+            results_by_offset[n].append({
+                "combined": post_tax + pretax,
+                "post_tax": post_tax,
+                "pretax": pretax
+            })
             
         # After simulation finishes, check if it triggered early access
         if early_pretax_access_age is not None:
@@ -147,9 +151,16 @@ def run_projection(scenario_id):
             break
             
         max_covered_offset = n
-        mean = sum(vals) / len(vals)
-        variance = sum((x - mean) ** 2 for x in vals) / len(vals)
+        combined_vals = [v["combined"] for v in vals]
+        post_tax_vals = [v["post_tax"] for v in vals]
+        pretax_vals = [v["pretax"] for v in vals]
+        
+        mean = sum(combined_vals) / len(combined_vals)
+        variance = sum((x - mean) ** 2 for x in combined_vals) / len(combined_vals)
         stdev = math.sqrt(variance)
+        
+        mean_post_tax = sum(post_tax_vals) / len(post_tax_vals)
+        mean_pretax = sum(pretax_vals) / len(pretax_vals)
         
         # Confidence bands
         ci50_low = mean - 0.674 * stdev
@@ -162,6 +173,8 @@ def run_projection(scenario_id):
         final_results.append({
             "age": current_age + n,
             "mean_balance": mean,
+            "mean_post_tax": mean_post_tax,
+            "mean_pretax": mean_pretax,
             "stdev_balance": stdev,
             "ci50_low": ci50_low,
             "ci50_high": ci50_high,

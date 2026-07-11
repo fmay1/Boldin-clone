@@ -110,6 +110,8 @@ function Results() {
                   <th style={{ padding: '8px', textAlign: 'right' }}>70% CI Low</th>
                   <th style={{ padding: '8px', textAlign: 'right' }}>50% CI Low</th>
                   <th style={{ padding: '8px', textAlign: 'right' }}>Mean Balance</th>
+                  <th style={{ padding: '8px', textAlign: 'right' }}>Mean Post-Tax</th>
+                  <th style={{ padding: '8px', textAlign: 'right' }}>Mean Pre-Tax</th>
                   <th style={{ padding: '8px', textAlign: 'right' }}>50% CI High</th>
                   <th style={{ padding: '8px', textAlign: 'right' }}>70% CI High</th>
                   <th style={{ padding: '8px', textAlign: 'right' }}>95% CI High</th>
@@ -123,6 +125,8 @@ function Results() {
                     <td style={{ padding: '8px', textAlign: 'right' }}>{formatCurrency(row.ci70_low)}</td>
                     <td style={{ padding: '8px', textAlign: 'right' }}>{formatCurrency(row.ci50_low)}</td>
                     <td style={{ padding: '8px', textAlign: 'right' }}>{formatCurrency(row.mean_balance)}</td>
+                    <td style={{ padding: '8px', textAlign: 'right' }}>{formatCurrency(row.mean_post_tax)}</td>
+                    <td style={{ padding: '8px', textAlign: 'right' }}>{formatCurrency(row.mean_pretax)}</td>
                     <td style={{ padding: '8px', textAlign: 'right' }}>{formatCurrency(row.ci50_high)}</td>
                     <td style={{ padding: '8px', textAlign: 'right' }}>{formatCurrency(row.ci70_high)}</td>
                     <td style={{ padding: '8px', textAlign: 'right' }}>{formatCurrency(row.ci95_high)}</td>

@@ -49,6 +49,14 @@ def run_projection(scenario_id):
     start_year = scenario['return_start_year']
     end_year = scenario['return_end_year']
     
+    # Validate year range if both are provided
+    if start_year is not None and end_year is not None and start_year > end_year:
+        return {"error": "Return start year must be less than or equal to return end year."}, 400
+        
+    # Default end_year to most recent year in annual_returns if not provided
+    if end_year is None:
+        end_year = max(r['year'] for r in annual_returns)
+        
     # Calculate mean and stdev from selected range
     returns_in_range = [r['return_pct'] for r in annual_returns if start_year <= r['year'] <= end_year]
     if not returns_in_range:

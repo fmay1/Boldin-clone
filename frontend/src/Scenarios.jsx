@@ -94,7 +94,7 @@ function Scenarios() {
       inflation_rate_pct: parseFloat(inflationRate),
       return_mode: returnMode,
       return_start_year: returnMode === 'mean_stdev' ? parseFloat(returnStartYear) : null,
-      return_end_year: returnMode === 'mean_stdev' ? parseFloat(returnEndYear) : null,
+      return_end_year: returnMode === 'mean_stdev' && returnEndYear ? parseFloat(returnEndYear) : null,
       replay_start_year: returnMode === 'historical_replay' ? parseFloat(replayStartYear) : null
     }
 
@@ -146,7 +146,7 @@ function Scenarios() {
       inflation_rate_pct: parseFloat(editInflationRate),
       return_mode: editReturnMode,
       return_start_year: editReturnMode === 'mean_stdev' ? parseFloat(editReturnStartYear) : null,
-      return_end_year: editReturnMode === 'mean_stdev' ? parseFloat(editReturnEndYear) : null,
+      return_end_year: editReturnMode === 'mean_stdev' && editReturnEndYear ? parseFloat(editReturnEndYear) : null,
       replay_start_year: editReturnMode === 'historical_replay' ? parseFloat(editReplayStartYear) : null
     }
 
@@ -284,7 +284,6 @@ function Scenarios() {
                 type="number" 
                 value={editingId ? editReturnEndYear : returnEndYear} 
                 onChange={(e) => editingId ? setEditReturnEndYear(e.target.value) : setReturnEndYear(e.target.value)} 
-                required 
               />
             </div>
           </>

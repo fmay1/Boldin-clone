@@ -8,6 +8,7 @@ function Results() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [warning, setWarning] = useState('')
+  const [earlyAccessWarning, setEarlyAccessWarning] = useState('')
 
   // Fetch available scenarios on mount
   useEffect(() => {
@@ -23,12 +24,14 @@ function Results() {
       setResults([])
       setError('')
       setWarning('')
+      setEarlyAccessWarning('')
       return
     }
     
     setLoading(true)
     setError('')
     setWarning('')
+    setEarlyAccessWarning('')
     setResults([])
     
     fetch(`/api/projection/${selectedScenarioId}`)
@@ -39,6 +42,7 @@ function Results() {
         } else {
           setResults(data.results || [])
           if (data.warning) setWarning(data.warning)
+          if (data.early_access_warning) setEarlyAccessWarning(data.early_access_warning)
         }
       })
       .catch(err => setError('Failed to fetch projection'))
@@ -70,6 +74,7 @@ function Results() {
 
       {error && <div style={{ color: '#721c24', backgroundColor: '#f8d7da', padding: '10px', borderRadius: '4px', marginBottom: '15px' }}>{error}</div>}
       {warning && <div style={{ color: '#856404', backgroundColor: '#fff3cd', border: '1px solid #ffeeba', padding: '10px', borderRadius: '4px', marginBottom: '15px' }}>{warning}</div>}
+      {earlyAccessWarning && <div style={{ color: '#856404', backgroundColor: '#fff3cd', border: '1px solid #ffeeba', padding: '10px', borderRadius: '4px', marginBottom: '15px' }}>{earlyAccessWarning}</div>}
 
       {loading && <p>Loading projection...</p>}
 

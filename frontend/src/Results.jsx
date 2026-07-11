@@ -89,16 +89,14 @@ function Results() {
                 <Tooltip formatter={(val) => formatCurrency(val)} />
                 <Legend />
                 
-                {/* Confidence Intervals */}
-                <Line type="monotone" dataKey="ci50_high" stroke="#b3cde3" strokeDasharray="4 4" name="50% CI High" dot={false} />
-                <Line type="monotone" dataKey="ci50_low" stroke="#b3cde3" strokeDasharray="4 4" name="50% CI Low" dot={false} />
-                <Line type="monotone" dataKey="ci70_high" stroke="#8884d8" strokeDasharray="4 4" name="70% CI High" dot={false} />
-                <Line type="monotone" dataKey="ci70_low" stroke="#8884d8" strokeDasharray="4 4" name="70% CI Low" dot={false} />
-                <Line type="monotone" dataKey="ci95_high" stroke="#5b5ea6" strokeDasharray="4 4" name="95% CI High" dot={false} />
+                {/* Confidence Intervals & Mean */}
                 <Line type="monotone" dataKey="ci95_low" stroke="#5b5ea6" strokeDasharray="4 4" name="95% CI Low" dot={false} />
-                
-                {/* Mean Balance */}
+                <Line type="monotone" dataKey="ci70_low" stroke="#8884d8" strokeDasharray="4 4" name="70% CI Low" dot={false} />
+                <Line type="monotone" dataKey="ci50_low" stroke="#b3cde3" strokeDasharray="4 4" name="50% CI Low" dot={false} />
                 <Line type="monotone" dataKey="mean_balance" stroke="#333" name="Mean Balance" strokeWidth={2} dot={false} />
+                <Line type="monotone" dataKey="ci50_high" stroke="#b3cde3" strokeDasharray="4 4" name="50% CI High" dot={false} />
+                <Line type="monotone" dataKey="ci70_high" stroke="#8884d8" strokeDasharray="4 4" name="70% CI High" dot={false} />
+                <Line type="monotone" dataKey="ci95_high" stroke="#5b5ea6" strokeDasharray="4 4" name="95% CI High" dot={false} />
               </LineChart>
             </ResponsiveContainer>
           </div>
@@ -108,12 +106,12 @@ function Results() {
               <thead>
                 <tr style={{ borderBottom: '2px solid #ddd' }}>
                   <th style={{ padding: '8px', textAlign: 'left' }}>Age</th>
-                  <th style={{ padding: '8px', textAlign: 'right' }}>Mean Balance</th>
-                  <th style={{ padding: '8px', textAlign: 'right' }}>50% CI Low</th>
-                  <th style={{ padding: '8px', textAlign: 'right' }}>50% CI High</th>
-                  <th style={{ padding: '8px', textAlign: 'right' }}>70% CI Low</th>
-                  <th style={{ padding: '8px', textAlign: 'right' }}>70% CI High</th>
                   <th style={{ padding: '8px', textAlign: 'right' }}>95% CI Low</th>
+                  <th style={{ padding: '8px', textAlign: 'right' }}>70% CI Low</th>
+                  <th style={{ padding: '8px', textAlign: 'right' }}>50% CI Low</th>
+                  <th style={{ padding: '8px', textAlign: 'right' }}>Mean Balance</th>
+                  <th style={{ padding: '8px', textAlign: 'right' }}>50% CI High</th>
+                  <th style={{ padding: '8px', textAlign: 'right' }}>70% CI High</th>
                   <th style={{ padding: '8px', textAlign: 'right' }}>95% CI High</th>
                 </tr>
               </thead>
@@ -121,12 +119,12 @@ function Results() {
                 {results.map((row, idx) => (
                   <tr key={idx} style={{ borderBottom: '1px solid #eee' }}>
                     <td style={{ padding: '8px' }}>{row.age}</td>
-                    <td style={{ padding: '8px', textAlign: 'right' }}>{formatCurrency(row.mean_balance)}</td>
-                    <td style={{ padding: '8px', textAlign: 'right' }}>{formatCurrency(row.ci50_low)}</td>
-                    <td style={{ padding: '8px', textAlign: 'right' }}>{formatCurrency(row.ci50_high)}</td>
-                    <td style={{ padding: '8px', textAlign: 'right' }}>{formatCurrency(row.ci70_low)}</td>
-                    <td style={{ padding: '8px', textAlign: 'right' }}>{formatCurrency(row.ci70_high)}</td>
                     <td style={{ padding: '8px', textAlign: 'right' }}>{formatCurrency(row.ci95_low)}</td>
+                    <td style={{ padding: '8px', textAlign: 'right' }}>{formatCurrency(row.ci70_low)}</td>
+                    <td style={{ padding: '8px', textAlign: 'right' }}>{formatCurrency(row.ci50_low)}</td>
+                    <td style={{ padding: '8px', textAlign: 'right' }}>{formatCurrency(row.mean_balance)}</td>
+                    <td style={{ padding: '8px', textAlign: 'right' }}>{formatCurrency(row.ci50_high)}</td>
+                    <td style={{ padding: '8px', textAlign: 'right' }}>{formatCurrency(row.ci70_high)}</td>
                     <td style={{ padding: '8px', textAlign: 'right' }}>{formatCurrency(row.ci95_high)}</td>
                   </tr>
                 ))}

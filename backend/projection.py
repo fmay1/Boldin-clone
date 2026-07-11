@@ -65,10 +65,25 @@ def run_projection(scenario_id):
     # Convert ages to months for precise monthly simulation (per Section 4a)
     retirement_month = round((retirement_age - current_age) * 12)
     total_months = int((end_age - current_age) * 12)
-    max_year_offset = math.ceil(end_age - current_age)
     
-    # Storage for simulation results per forward year offset
-    results_by_offset = {n: [] for n in range(1, max_year_offset + 1)}
+    # Determine target ages for reporting results
+    # Whole years from current_age up to retirement_age, plus retirement_age if fractional,
+    # then whole years from retirement_age to end_age.
+    target_ages = []
+    age = math.floor(current_age) + 1
+    while age < retirement_age:
+        target_ages.append(age)
+        age += 1
+    if retirement_age != int(retirement_age):
+        target_ages.append(retirement_age)
+    age = math.ceil(retirement_age)
+    while age <= end_age:
+        target_ages.append(age)
+        age += 1
+        
+    # Map target ages to month indices for recording
+    target_months = {round((A - current_age) * 12): A for A in target_ages}
+    results_by_age = {A: [] for A in target_ages}
     
     # Pre-calculate initial balances and contributions by account type
     initial_post_tax = sum(a['current_balance'] for a in accounts if a['type'] == 'post-tax')
@@ -143,15 +158,14 @@ def run_projection(scenario_id):
             post_tax = max(0.0, post_tax)
             pretax = max(0.0, pretax)
             
-            # Record balances at end of each year or last month
-            if m % 12 == 0 or m == total_months:
-                year_offset = (m + 11) // 12
-                if year_offset in results_by_offset:
-                    results_by_offset[year_offset].append({
-                        "combined": post_tax + pretax,
-                        "post_tax": post_tax,
-                        "pretax": pretax
-                    })
+            # Record balances at target ages
+            if m in target_months:
+                target_age = target_months[m]
+                results_by_age[target_age].append({
+                    "combined": post_tax + pretax,
+                    "post_tax": post_tax,
+                    "pretax": pretax
+                })
             
         # After simulation finishes, check if it triggered early access
         if early_pretax_access_age is not None:
@@ -159,18 +173,18 @@ def run_projection(scenario_id):
             if min_early_access_age is None or early_pretax_access_age < min_early_access_age:
                 min_early_access_age = early_pretax_access_age
             
-    # Step 4: Aggregate across simulations per offset
+    # Step 4: Aggregate across simulations per target age
     final_results = []
-    max_covered_offset = 0
+    max_covered_age = None
     warning = None
     
-    for n in range(1, max_year_offset + 1):
-        vals = results_by_offset[n]
+    for target_age in target_ages:
+        vals = results_by_age[target_age]
         # Require at least 5 simulations to report a statistically meaningful data point
         if len(vals) < 5:
             break
             
-        max_covered_offset = n
+        max_covered_age = target_age
         combined_vals = [v["combined"] for v in vals]
         post_tax_vals = [v["post_tax"] for v in vals]
         pretax_vals = [v["pretax"] for v in vals]
@@ -191,7 +205,7 @@ def run_projection(scenario_id):
         ci95_high = mean + 1.96 * stdev
         
         final_results.append({
-            "age": current_age + n,
+            "age": target_age,
             "mean_balance": mean,
             "mean_post_tax": mean_post_tax,
             "mean_pretax": mean_pretax,
@@ -205,8 +219,8 @@ def run_projection(scenario_id):
         })
         
     # Step 5: Warning if horizon not fully covered (due to data limits or <5 simulations)
-    if max_covered_offset < max_year_offset:
-        warning = f"Selected starting-year range doesn't cover the full projection horizon. Results shown only through age {current_age + max_covered_offset}."
+    if max_covered_age is not None and max_covered_age < end_age:
+        warning = f"Selected starting-year range doesn't cover the full projection horizon. Results shown only through age {max_covered_age}."
         
     # Step 6: Warning for early pre-tax access
     early_access_warning = None

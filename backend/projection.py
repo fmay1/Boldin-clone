@@ -3,9 +3,8 @@ from database import get_connection
 
 def run_projection(scenario_id):
     """
-    Runs a year-by-year projection for a given scenario.
-    Currently supports only 'mean_stdev' return mode.
-    Returns a dictionary with year-by-year results and metadata.
+    Runs a year-by-year projection for a given scenario using a rolling-window
+    historical simulation (mean_stdev mode).
     """
     conn = get_connection()
     cursor = conn.cursor()
@@ -42,142 +41,123 @@ def run_projection(scenario_id):
     inflation_rate = scenario['inflation_rate_pct'] / 100.0
     return_mode = scenario['return_mode']
     
-    # Only mean/stdev mode is implemented in Step 5
     if return_mode != 'mean_stdev':
         return {"error": "Only mean_stdev mode is currently supported."}, 400
         
     start_year = scenario['return_start_year']
     end_year = scenario['return_end_year']
     
-    # Validate year range if both are provided
     if start_year is not None and end_year is not None and start_year > end_year:
         return {"error": "Return start year must be less than or equal to return end year."}, 400
         
-    # Default end_year to most recent year in annual_returns if not provided
+    # Build lookup for returns and find last data year
+    returns_by_year = {r['year']: r['return_pct'] for r in annual_returns}
+    last_data_year = max(returns_by_year.keys())
+    
     if end_year is None:
-        end_year = max(r['year'] for r in annual_returns)
+        end_year = last_data_year
         
-    # Calculate mean and stdev from selected range
-    returns_in_range = [r['return_pct'] for r in annual_returns if start_year <= r['year'] <= end_year]
-    if not returns_in_range:
+    # Determine eligible starting years
+    eligible_years = [y for y in returns_by_year.keys() if start_year <= y <= end_year]
+    if not eligible_years:
         return {"error": "No return data found in the selected year range."}, 400
         
-    mean_return = sum(returns_in_range) / len(returns_in_range)
-    variance = sum((x - mean_return) ** 2 for x in returns_in_range) / len(returns_in_range)
-    stdev_return = math.sqrt(variance)
+    years_until_retirement = retirement_age - current_age
+    projection_horizon = end_age - current_age
     
-    mean_return_rate = mean_return / 100.0
-    stdev_return_rate = stdev_return / 100.0
+    # Storage for simulation results per forward year offset
+    results_by_offset = {n: [] for n in range(1, projection_horizon + 1)}
     
-    # Initialize projection results
-    results = []
-    depleted_at_age = None
+    # Pre-calculate initial balances and contributions by account type
+    initial_post_tax = sum(a['current_balance'] for a in accounts if a['type'] == 'post-tax')
+    initial_pretax = sum(a['current_balance'] for a in accounts if a['type'] == 'pre-tax')
+    contrib_post_tax = sum(a['annual_contribution'] for a in accounts if a['type'] == 'post-tax')
+    contrib_pretax = sum(a['annual_contribution'] for a in accounts if a['type'] == 'pre-tax')
     
-    # Current balances for main, low, and high confidence bands
-    # Each is a list of account balances
-    main_balances = [a['current_balance'] for a in accounts]
-    low_balances = [a['current_balance'] for a in accounts]
-    high_balances = [a['current_balance'] for a in accounts]
-    
-    contributions = [a['annual_contribution'] for a in accounts]
-    account_types = [a['type'] for a in accounts]
-    
-    for age in range(current_age, end_age + 1):
-        years_since_start = age - current_age
+    # Run one simulation per eligible starting year
+    for S in eligible_years:
+        post_tax = initial_post_tax
+        pretax = initial_pretax
         
-        # Inflation-adjusted expenses
-        annual_expenses = expenses * ((1 + inflation_rate) ** years_since_start)
-        
-        # Apply contributions if pre-retirement
-        if age < retirement_age:
-            for i in range(len(accounts)):
-                main_balances[i] += contributions[i]
-                low_balances[i] += contributions[i]
-                high_balances[i] += contributions[i]
+        for n in range(1, projection_horizon + 1):
+            historical_year = S + n - 1
+            
+            # Stop simulation if we run out of historical data
+            if historical_year > last_data_year:
+                break
                 
-        # Apply withdrawals if post-retirement
-        if age >= retirement_age:
-            if depleted_at_age is None:
-                # Determine withdrawal split
+            # Step 3c: Contributions or Withdrawals (applied before growth)
+            if n <= years_until_retirement:
+                post_tax += contrib_post_tax
+                pretax += contrib_pretax
+            else:
+                age = current_age + n
+                withdrawal_need = expenses * ((1 + inflation_rate) ** n)
+                
                 if age < 59.5:
-                    pretax_pct = 0.0
-                    posttax_pct = 1.0
+                    # Withdraw only from post-tax
+                    withdraw = min(withdrawal_need, post_tax)
+                    post_tax -= withdraw
                 else:
-                    pretax_pct = withdrawal_split_pretax_pct / 100.0
-                    posttax_pct = 1.0 - pretax_pct
+                    # Split withdrawal by percentage
+                    pretax_withdrawal = withdrawal_need * (withdrawal_split_pretax_pct / 100.0)
+                    posttax_withdrawal = withdrawal_need * (1.0 - withdrawal_split_pretax_pct / 100.0)
                     
-                pretax_withdrawal = annual_expenses * pretax_pct
-                posttax_withdrawal = annual_expenses * posttax_pct
-                
-                # Withdraw from main balances
-                _apply_withdrawals(main_balances, account_types, pretax_withdrawal, posttax_withdrawal)
-                _apply_withdrawals(low_balances, account_types, pretax_withdrawal, posttax_withdrawal)
-                _apply_withdrawals(high_balances, account_types, pretax_withdrawal, posttax_withdrawal)
-                
-        # Apply returns
-        for i in range(len(accounts)):
-            main_balances[i] *= (1 + mean_return_rate)
-            low_balances[i] *= (1 + mean_return_rate - stdev_return_rate)
-            high_balances[i] *= (1 + mean_return_rate + stdev_return_rate)
+                    pretax -= min(pretax_withdrawal, pretax)
+                    post_tax -= min(posttax_withdrawal, post_tax)
+                    
+            # Step 3d: Apply growth from actual historical return
+            ret_pct = returns_by_year[historical_year] / 100.0
+            post_tax *= (1 + ret_pct)
+            pretax *= (1 + ret_pct)
             
-        # Floor at zero
-        for i in range(len(accounts)):
-            main_balances[i] = max(0, main_balances[i])
-            low_balances[i] = max(0, low_balances[i])
-            high_balances[i] = max(0, high_balances[i])
+            # Floor at zero
+            post_tax = max(0.0, post_tax)
+            pretax = max(0.0, pretax)
             
-        # Check for depletion
-        total_main = sum(main_balances)
-        if total_main == 0 and depleted_at_age is None:
-            depleted_at_age = age
+            # Step 3e: Record combined balance for this offset
+            results_by_offset[n].append(post_tax + pretax)
             
-        # Record results
-        results.append({
-            "age": age,
-            "main_balance": total_main,
-            "low_balance": sum(low_balances),
-            "high_balance": sum(high_balances),
-            "post_tax_balance": sum(main_balances[i] for i in range(len(accounts)) if account_types[i] == 'post-tax'),
-            "pre_tax_balance": sum(main_balances[i] for i in range(len(accounts)) if account_types[i] == 'pre-tax')
+    # Step 4: Aggregate across simulations per offset
+    final_results = []
+    max_covered_offset = 0
+    warning = None
+    
+    for n in range(1, projection_horizon + 1):
+        vals = results_by_offset[n]
+        if not vals:
+            break
+            
+        max_covered_offset = n
+        mean = sum(vals) / len(vals)
+        variance = sum((x - mean) ** 2 for x in vals) / len(vals)
+        stdev = math.sqrt(variance)
+        
+        # Confidence bands
+        ci50_low = mean - 0.674 * stdev
+        ci50_high = mean + 0.674 * stdev
+        ci70_low = mean - 1.036 * stdev
+        ci70_high = mean + 1.036 * stdev
+        ci95_low = mean - 1.96 * stdev
+        ci95_high = mean + 1.96 * stdev
+        
+        final_results.append({
+            "age": current_age + n,
+            "mean_balance": mean,
+            "stdev_balance": stdev,
+            "ci50_low": ci50_low,
+            "ci50_high": ci50_high,
+            "ci70_low": ci70_low,
+            "ci70_high": ci70_high,
+            "ci95_low": ci95_low,
+            "ci95_high": ci95_high
         })
         
+    # Step 5: Warning if horizon not fully covered
+    if max_covered_offset < projection_horizon:
+        warning = f"Selected starting-year range doesn't cover the full projection horizon. Results shown only through age {current_age + max_covered_offset}."
+        
     return {
-        "results": results,
-        "depleted_at_age": depleted_at_age,
-        "mean_return": mean_return,
-        "stdev_return": stdev_return
+        "results": final_results,
+        "warning": warning
     }
-
-def _apply_withdrawals(balances, account_types, pretax_withdrawal, posttax_withdrawal):
-    """
-    Applies withdrawals to account balances based on pre/post-tax split.
-    If one account type runs out, the shortfall is covered by the other type.
-    """
-    remaining_pretax = pretax_withdrawal
-    remaining_posttax = posttax_withdrawal
-    
-    # First pass: withdraw from designated types
-    for i in range(len(balances)):
-        if account_types[i] == 'pre-tax' and remaining_pretax > 0:
-            withdrawal = min(remaining_pretax, balances[i])
-            balances[i] -= withdrawal
-            remaining_pretax -= withdrawal
-        elif account_types[i] == 'post-tax' and remaining_posttax > 0:
-            withdrawal = min(remaining_posttax, balances[i])
-            balances[i] -= withdrawal
-            remaining_posttax -= withdrawal
-            
-    # Second pass: cover shortfall from the other type
-    if remaining_pretax > 0:
-        for i in range(len(balances)):
-            if account_types[i] == 'post-tax' and remaining_pretax > 0:
-                withdrawal = min(remaining_pretax, balances[i])
-                balances[i] -= withdrawal
-                remaining_pretax -= withdrawal
-                
-    if remaining_posttax > 0:
-        for i in range(len(balances)):
-            if account_types[i] == 'pre-tax' and remaining_posttax > 0:
-                withdrawal = min(remaining_posttax, balances[i])
-                balances[i] -= withdrawal
-                remaining_posttax -= withdrawal

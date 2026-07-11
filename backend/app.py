@@ -2,6 +2,7 @@ import io
 import csv
 from flask import Flask, jsonify, request
 from database import init_db, get_connection
+from projection import run_projection
 
 app = Flask(__name__)
 
@@ -367,6 +368,15 @@ def delete_scenario(scenario_id):
     conn.commit()
     conn.close()
     return jsonify({"message": "Scenario deleted"})
+
+# --- Projection Route ---
+
+@app.route('/api/projection/<int:scenario_id>', methods=['GET'])
+def get_projection(scenario_id):
+    result = run_projection(scenario_id)
+    if isinstance(result, tuple):
+        return jsonify(result[0]), result[1]
+    return jsonify(result)
 
 if __name__ == '__main__':
     app.run(debug=True, port=5000)

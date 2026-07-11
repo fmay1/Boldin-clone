@@ -13,10 +13,22 @@ def _run_monthly_simulation(start_year, current_age, retirement_age, end_age, ex
     retirement_month = round((retirement_age - current_age) * 12)
     total_months = int((end_age - current_age) * 12)
     
+    # Compute first period length based on fractional age
+    if current_age == int(current_age):
+        first_period_months = 12
+    else:
+        first_period_months = round((1 - (current_age % 1)) * 12)
+        
     results_by_age = {}
     
     for m in range(1, total_months + 1):
-        historical_year = start_year + (m - 1) // 12
+        # Determine period index for historical year assignment
+        if m <= first_period_months:
+            period_index = 0
+        else:
+            period_index = 1 + (m - first_period_months - 1) // 12
+            
+        historical_year = start_year + period_index
         if historical_year > last_data_year:
             break
             

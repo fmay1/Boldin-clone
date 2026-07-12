@@ -279,9 +279,7 @@ function Scenarios() {
       return_mode: editReturnMode,
       return_start_year: editReturnMode === 'mean_stdev' ? parseFloat(editReturnStartYear) : null,
       return_end_year: editReturnMode === 'mean_stdev' && editReturnEndYear ? parseFloat(editReturnEndYear) : null,
-      replay_start_year: editReturnMode === 'historical_replay' ? parseFloat(editReplayStartYear) : null,
-      copy_expenditures: true,
-      source_scenario_id: editingId
+      replay_start_year: editReturnMode === 'historical_replay' ? parseFloat(editReplayStartYear) : null
     }
 
     try {
@@ -292,6 +290,19 @@ function Scenarios() {
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'Failed to create scenario')
+      
+      // Create expenditures for the new scenario using current form state
+      for (const exp of expenditures) {
+        await fetch(`/api/scenarios/${data.id}/expenditures`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            amount: parseFloat(exp.amount) || 0,
+            age: parseFloat(exp.age),
+            inflation_adjusted: exp.inflationAdjusted ? 1 : 0
+          })
+        })
+      }
       
       setSuccess('New scenario created')
       resetForm()

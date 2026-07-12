@@ -164,12 +164,16 @@ def get_scenarios():
     cursor = conn.cursor()
     cursor.execute("SELECT * FROM scenarios")
     rows = cursor.fetchall()
-    conn.close()
     
     scenarios = []
     for row in rows:
+        scenario_id = row[0]
+        cursor.execute("SELECT id, amount, age, inflation_adjusted FROM scenario_expenditures WHERE scenario_id = ?", (scenario_id,))
+        exp_rows = cursor.fetchall()
+        expenditures = [{"id": e[0], "amount": e[1], "age": e[2], "inflation_adjusted": e[3]} for e in exp_rows]
+        
         scenarios.append({
-            "id": row[0],
+            "id": scenario_id,
             "name": row[1],
             "current_age": row[2],
             "retirement_age": row[3],
@@ -180,8 +184,10 @@ def get_scenarios():
             "return_mode": row[8],
             "return_start_year": row[9],
             "return_end_year": row[10],
-            "replay_start_year": row[11]
+            "replay_start_year": row[11],
+            "expenditures": expenditures
         })
+    conn.close()
     return jsonify(scenarios)
 
 @app.route('/api/scenarios', methods=['POST'])
@@ -391,6 +397,122 @@ def delete_scenario(scenario_id):
     conn.commit()
     conn.close()
     return jsonify({"message": "Scenario deleted"})
+
+# --- Scenario Expenditure Routes ---
+
+@app.route('/api/scenarios/<int:scenario_id>/expenditures', methods=['POST'])
+def create_expenditure(scenario_id):
+    data = request.get_json()
+    conn = get_connection()
+    cursor = conn.cursor()
+    
+    # Check scenario exists and get current_age
+    cursor.execute("SELECT current_age FROM scenarios WHERE id = ?", (scenario_id,))
+    scenario = cursor.fetchone()
+    if not scenario:
+        conn.close()
+        return jsonify({"error": "Scenario not found"}), 404
+        
+    current_age = scenario[0]
+    
+    # Check count of existing expenditures
+    cursor.execute("SELECT COUNT(*) FROM scenario_expenditures WHERE scenario_id = ?", (scenario_id,))
+    count = cursor.fetchone()[0]
+    if count >= 10:
+        conn.close()
+        return jsonify({"error": "Maximum of 10 expenditures per scenario reached"}), 400
+        
+    amount = data.get('amount')
+    age = data.get('age')
+    inflation_adjusted = data.get('inflation_adjusted', 0)
+    
+    if amount is None or age is None:
+        conn.close()
+        return jsonify({"error": "Amount and age are required"}), 400
+        
+    try:
+        amount = float(amount)
+        age = float(age)
+    except (ValueError, TypeError):
+        conn.close()
+        return jsonify({"error": "Invalid numeric values"}), 400
+        
+    if amount <= 0:
+        conn.close()
+        return jsonify({"error": "Amount must be > 0"}), 400
+        
+    if age < current_age:
+        conn.close()
+        return jsonify({"error": "Age must be >= current_age of the scenario"}), 400
+        
+    cursor.execute(
+        "INSERT INTO scenario_expenditures (scenario_id, amount, age, inflation_adjusted) VALUES (?, ?, ?, ?)",
+        (scenario_id, amount, age, 1 if inflation_adjusted else 0)
+    )
+    conn.commit()
+    exp_id = cursor.lastrowid
+    conn.close()
+    return jsonify({"id": exp_id, "message": "Expenditure created"}), 201
+
+@app.route('/api/scenarios/<int:scenario_id>/expenditures/<int:eid>', methods=['PUT'])
+def update_expenditure(scenario_id, eid):
+    data = request.get_json()
+    conn = get_connection()
+    cursor = conn.cursor()
+    
+    # Check if expenditure belongs to scenario
+    cursor.execute("SELECT amount, age FROM scenario_expenditures WHERE id = ? AND scenario_id = ?", (eid, scenario_id))
+    exp = cursor.fetchone()
+    if not exp:
+        conn.close()
+        return jsonify({"error": "Expenditure not found or does not belong to this scenario"}), 404
+        
+    # Get scenario current_age
+    cursor.execute("SELECT current_age FROM scenarios WHERE id = ?", (scenario_id,))
+    current_age = cursor.fetchone()[0]
+    
+    amount = data.get('amount')
+    age = data.get('age')
+    inflation_adjusted = data.get('inflation_adjusted', 0)
+    
+    if amount is None or age is None:
+        conn.close()
+        return jsonify({"error": "Amount and age are required"}), 400
+        
+    try:
+        amount = float(amount)
+        age = float(age)
+    except (ValueError, TypeError):
+        conn.close()
+        return jsonify({"error": "Invalid numeric values"}), 400
+        
+    if amount <= 0:
+        conn.close()
+        return jsonify({"error": "Amount must be > 0"}), 400
+        
+    if age < current_age:
+        conn.close()
+        return jsonify({"error": "Age must be >= current_age of the scenario"}), 400
+        
+    cursor.execute(
+        "UPDATE scenario_expenditures SET amount = ?, age = ?, inflation_adjusted = ? WHERE id = ? AND scenario_id = ?",
+        (amount, age, 1 if inflation_adjusted else 0, eid, scenario_id)
+    )
+    conn.commit()
+    conn.close()
+    return jsonify({"message": "Expenditure updated"})
+
+@app.route('/api/scenarios/<int:scenario_id>/expenditures/<int:eid>', methods=['DELETE'])
+def delete_expenditure(scenario_id, eid):
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute("DELETE FROM scenario_expenditures WHERE id = ? AND scenario_id = ?", (eid, scenario_id))
+    if cursor.rowcount == 0:
+        conn.close()
+        return jsonify({"error": "Expenditure not found or does not belong to this scenario"}), 404
+    conn.commit()
+    conn.close()
+    return jsonify({"message": "Expenditure deleted"})
 
 # --- Projection Route ---
 

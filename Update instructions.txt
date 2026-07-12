@@ -1,0 +1,8 @@
+The correct way to update an existing clone is git pull:
+
+On your original computer, after making changes: commit them and push to GitHub as usual (git add, git commit, git push).
+On the new computer, open a terminal, navigate into the already-cloned project folder (cd into it), and run:
+
+   git pull
+This fetches whatever's new on GitHub and merges it into your local copy — no re-cloning, no touching retirement_planner.db (since it's git-ignored, git pull never looks at it).
+One thing worth remembering: if a change added a new Python package to requirements.txt or a new npm package to package.json, git pull updates those files, but doesn't actually install the new packages. You'd need to re-run install.bat afterward (it's safe to run again — pip install and npm install just skip anything already installed and add what's new). If you're not sure whether a given update added a new dependency, running install.bat after every git pull is a harmless habit either way.

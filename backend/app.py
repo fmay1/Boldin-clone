@@ -590,8 +590,9 @@ def preview_projection():
     
     accounts_list = [dict(a) for a in accounts]
     returns_list = [dict(r) for r in annual_returns]
+    expenditures = data.get('expenditures') or []
     
-    result = calculate_projection(data, accounts_list, returns_list)
+    result = calculate_projection(data, accounts_list, returns_list, expenditures)
     if "error" in result:
         return jsonify(result), 400
     return jsonify(result)

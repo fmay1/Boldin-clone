@@ -87,7 +87,16 @@ function Live() {
     setLoading(true)
     
     try {
-      const payload = { ...formData, expenditures: expenditures }
+      // Filter out incomplete expenditures and format for backend
+      const validExpenditures = expenditures
+        .filter(exp => exp.age !== '' && exp.age !== null && exp.amount !== '' && exp.amount !== null)
+        .map(exp => ({
+          amount: parseFloat(exp.amount) || 0,
+          age: parseFloat(exp.age),
+          inflation_adjusted: exp.inflationAdjusted ? 1 : 0
+        }))
+        
+      const payload = { ...formData, expenditures: validExpenditures }
       const res = await fetch('/api/projection/preview', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },

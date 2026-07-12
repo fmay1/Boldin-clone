@@ -48,6 +48,10 @@ Things the AI should avoid introducing unless explicitly approved:
 - User can create and compare multiple scenarios side by side (e.g. retire at 55 vs. 57), each with its own ages, expenses, withdrawal split, inflation rate, and return mode — but sharing the same set of accounts
 - Results shown as a chart and/or table of balances over time per scenario
 
+**Post-MVP additions (built after the MVP was completed — see Section 14):**
+- Comparisons tab: overlay multiple scenarios' mean-only results on one chart (see Flow 5)
+- Live tweaking page: pick a saved scenario as a starting point, edit any of its fields, click Update to preview the resulting projection without saving, with an optional separate action to save the tweak back to the scenario permanently (see Flow 6)
+
 ## 4. Data Model
 
 **Account**
@@ -154,6 +158,8 @@ Given this stack (Python/Flask, React, SQLite), the following should never be co
   - Scenarios view (create/edit/delete scenarios, select scenarios to view or compare)
   - Results view (single scenario at a time — charts via Recharts, tables, confidence bands for mean/stdev mode, depletion/warning flags)
   - Comparisons view (multiple scenarios overlaid — means only, no confidence bands or table detail, so mean_stdev and historical_replay scenarios can be compared side by side on equal footing)
+  - Live view (pick a saved scenario as a base, edit any of its fields inline, click Update to preview results without saving; optional separate action to save changes back to the scenario)
+- **New backend endpoint needed for Live view:** a "preview" projection endpoint that accepts a full set of scenario parameters directly in the request (not a saved scenario id) and returns computed results without writing anything to the database — distinct from the existing endpoint that runs a projection for an already-saved scenario. The "Save changes to this scenario" action, separately, uses the existing scenario update endpoint (same as editing a scenario normally on the Scenarios page).
 - **Data flow**: Frontend sends account/scenario data to backend via API → backend saves to SQLite. When viewing results, frontend requests a projection → backend runs `projection.py` fresh using current DB data → returns computed year-by-year results → frontend renders as chart/table. Nothing is computed client-side except UI state.
 
 ## 8. Tech Stack
@@ -198,6 +204,13 @@ Given this stack (Python/Flask, React, SQLite), the following should never be co
 4. Any warnings from the underlying calculation (data-coverage cutoff, depletion, early pre-tax access) are still shown per scenario, just without the full CI/table detail — comparisons is a simplified view, not a simplified warning system.
 5. For full detail on any one scenario shown in the comparison, the user returns to Flow 4's single-scenario Results view for that scenario.
 
+**Flow 6: Live tweaking**
+1. Go to the "Live" page, select an existing scenario from a dropdown as the starting point — all its fields (ages, expenses, inflation rate, withdrawal split, return mode and its settings) pre-fill an editable form
+2. Edit any field(s) directly on this page
+3. Click "Update" — app calls the new preview endpoint with the current (possibly edited) values, computes a fresh projection, and shows the result (same level of detail as the single-scenario Results view: confidence bands for mean_stdev, single line for historical_replay, table, warnings) — nothing is saved to the database by this action
+4. Repeat steps 2–3 as many times as desired, freely experimenting
+5. If the user wants to keep a particular set of tweaked values, click a separate "Save changes to this scenario" action, which writes the current form values back to the underlying scenario record (same effect as editing it on the Scenarios page and saving)
+
 ## 10. Edge Cases & Error Handling
 
 - CSV upload with malformed rows (missing value, non-numeric return/year) → reject those rows individually, show which rows failed and why, still process valid rows
@@ -238,10 +251,6 @@ Unless there's a specific, stated reason otherwise:
 
 ## 13. Future Ideas
 
-**Near-term (worth tackling right after MVP is complete, not a distant idea):**
-- Interactive controls (sliders/dials) directly on the Results page to tweak scenario parameters (retirement age, expenses, withdrawal split, etc.) and see results update live, instead of having to go back to the Scenarios tab, edit, save, and return. Needs real design decisions before building: whether a live tweak is a temporary preview or auto-saves, how the backend avoids being hammered on every drag event (debouncing), and whether it applies to one scenario or all displayed ones at once.
-
-**Longer-term / more speculative:**
 - Local LLM integration (Qwen models on a separate machine) to ask questions about the plan
 - Bank/brokerage account linking for automatic balance updates
 - Tax-bracket-aware withdrawal optimization (replacing the fixed percentage split)
@@ -265,6 +274,10 @@ Unless there's a specific, stated reason otherwise:
 7. **Historical replay mode** — Add the second return calculation mode to `projection.py` (replay actual historical sequence from a chosen start year), selectable per scenario, reflected in the Results view.
 8. **Comparisons tab** — New, separate frontend view (not an extension of the Results page). Lets you select multiple scenarios (any mix of mean_stdev/historical_replay) and see them overlaid on one chart as mean-only lines, per Flow 5 — no confidence bands, no table. Per-scenario warnings (data-coverage cutoff, depletion, early pre-tax access) still shown. The single-scenario Results view (step 6) is left untouched, keeping full CI/table detail for one scenario at a time. Basic styling included.
 9. **Final visual consistency pass** — Lighter than a full redo: unify colors/typography/spacing across all pages, refine chart presentation, address inconsistencies now that everything exists together, to meet the "looks like real retirement software" bar from Section 3.
+
+**— MVP complete after step 9 —**
+
+10. **Live tweaking page** — New backend "preview" endpoint (computes a projection from parameters passed directly in the request, no database write). New frontend "Live" page: scenario picker to pre-fill an editable form (all Scenario fields), an "Update" button that calls the preview endpoint and displays results at the same detail level as the single-scenario Results view, and a separate "Save changes to this scenario" action that writes back via the existing scenario update endpoint. Per Flow 6.
 
 ## 15. Open Questions
 
@@ -297,6 +310,8 @@ None currently — everything raised during planning was resolved into a decisio
 - Found (and fixed in the spec) a real bug affecting any simulation with a fractional `current_age`: historical years were being assigned to months using raw elapsed-month count (`S + floor(elapsed_months / 12)`), which only works cleanly when every period is exactly 12 months. With a fractional `current_age` (short first period), this caused two different calendar years' returns to blend within a single reporting period — verified independently against the real CSV, producing visibly nonsensical results (e.g. a "2008 return" period that was actually part-2007/part-2008, masking the real 2008 crash). Fixed by assigning exactly one historical year per reporting *period* (`S + period_index`), regardless of that period's length — the first period may be shorter than 12 months, but it still gets exactly one historical year's return, applied for however many months that period spans.
 - Split "viewing results" into two separate frontend views instead of one extended Results page: a single-scenario Results view (full detail — confidence bands for mean_stdev, table) and a separate Comparisons view (multiple scenarios overlaid, mean-only lines, no bands/table). Reason: mean_stdev scenarios produce confidence-band data that historical_replay scenarios don't have, so a unified comparison view would need to handle two different data shapes awkwardly. Showing means only in Comparisons sidesteps that entirely, at the cost of losing CI detail when comparing — full detail is still available by returning to the single-scenario Results view.
 - Considered skipping multi-scenario comparison (Build Order step 8) in favor of relying on the not-yet-built live-dial interaction (see Future Ideas) instead. Decided against it: comparison (seeing multiple full trajectories at once) and live single-scenario tweaking solve different problems, and comparison was deliberately pulled into MVP early on specifically because it's core to a near-retirement decision — skipping it would reverse that earlier decision without a strong enough reason. Comparison (step 8) proceeds as planned.
+- For the post-MVP "live tweaking" idea, chose a separate "Live" page with editable fields + an explicit Update button over true drag-and-see dials on the Results page. Reasoning: mean/stdev mode recomputes 30+ full rolling-window simulations per request, which isn't fast enough to feel smooth under continuous drag input without real debouncing complexity; the actual pain point (tab-switching between Scenarios and Results) is fully solved by a click-to-update page, without the added engineering cost of managing continuous drag state. Design: the Live page loads an existing scenario's values as a starting point, lets all fields be edited, computes via a new non-persisting "preview" endpoint on Update, and offers a separate explicit "Save changes to this scenario" action for keeping a tweak permanently — so casual experimentation never silently overwrites saved data.
+- Post-MVP code review (matching AGENTS.md's Final Review process) found: the mean/stdev aggregation was computed using population standard deviation (divide by n) rather than sample standard deviation (divide by n−1) as the plan originally assumed. Decision: switched to sample stdev, matching the plan's original reasoning (the 5-simulation minimum was justified partly by "n−1=0 is undefined at n=1," which only holds for sample stdev). Also found and fixed in code: `total_months` using `int()` truncation instead of `round()` (a floating-point risk that could silently drop the final projected month); the 59.5-and-over withdrawal split not falling back across accounts when one side runs short while the other still has funds (the same class of gap already fixed for the pre-59.5 case, but never extended to this branch); the `/api/projection/preview` endpoint missing the monthly-precision validation that the scenario create/update endpoints both have; unhandled exceptions when a required year field (e.g. `return_start_year`) is missing or blank on three endpoints; and the `scenarios` table declaring `current_age`/`retirement_age` as `INTEGER` in the SQLite schema despite the app requiring fractional values (works today only because of SQLite's permissive type affinity — corrected to `REAL` to match the actual requirement).
 
 ## 17. Success Criteria
 

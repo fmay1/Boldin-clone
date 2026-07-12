@@ -11,7 +11,7 @@ def _run_monthly_simulation(start_year, current_age, retirement_age, end_age, ex
     early_pretax_access_age = None
     
     retirement_month = round((retirement_age - current_age) * 12)
-    total_months = int((end_age - current_age) * 12)
+    total_months = round((end_age - current_age) * 12)
     
     # Compute first period length based on fractional age
     if current_age == int(current_age):
@@ -68,8 +68,29 @@ def _run_monthly_simulation(start_year, current_age, retirement_age, end_age, ex
             else:
                 pretax_withdrawal = monthly_withdrawal * (withdrawal_split_pretax_pct / 100.0)
                 posttax_withdrawal = monthly_withdrawal * (1.0 - withdrawal_split_pretax_pct / 100.0)
-                pretax -= min(pretax_withdrawal, pretax)
-                post_tax -= min(posttax_withdrawal, post_tax)
+                
+                # Attempt pretax withdrawal
+                if pretax >= pretax_withdrawal:
+                    pretax -= pretax_withdrawal
+                else:
+                    pretax_shortfall = pretax_withdrawal - pretax
+                    pretax = 0.0
+                    if post_tax >= pretax_shortfall:
+                        post_tax -= pretax_shortfall
+                    else:
+                        pretax_shortfall -= post_tax
+                        post_tax = 0.0
+                        
+                # Attempt post_tax withdrawal
+                if post_tax >= posttax_withdrawal:
+                    post_tax -= posttax_withdrawal
+                else:
+                    post_shortfall = posttax_withdrawal - post_tax
+                    post_tax = 0.0
+                    if pretax >= post_shortfall:
+                        pretax -= post_shortfall
+                    else:
+                        pretax = 0.0
                 
         post_tax = max(0.0, post_tax)
         pretax = max(0.0, pretax)
@@ -170,7 +191,7 @@ def calculate_projection(scenario_data, accounts, annual_returns):
             pretax_vals = [v["pretax"] for v in vals]
             
             mean = sum(combined_vals) / len(combined_vals)
-            variance = sum((x - mean) ** 2 for x in combined_vals) / len(combined_vals)
+            variance = sum((x - mean) ** 2 for x in combined_vals) / (len(combined_vals) - 1)
             stdev = math.sqrt(variance)
             
             mean_post_tax = sum(post_tax_vals) / len(post_tax_vals)

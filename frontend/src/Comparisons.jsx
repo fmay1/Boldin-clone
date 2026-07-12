@@ -89,7 +89,7 @@ function Comparisons() {
           multiple
           value={selectedIds}
           onChange={handleSelectChange}
-          style={{ padding: '8px', fontSize: '14px', width: '250px', height: '150px' }}
+          style={{ padding: '8px', fontSize: '14px', width: '400px', height: '150px' }}
         >
           {scenarios.map(s => (
             <option key={s.id} value={s.id}>{s.name}</option>

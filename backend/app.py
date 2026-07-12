@@ -2,7 +2,7 @@ import io
 import csv
 from flask import Flask, jsonify, request
 from database import init_db, get_connection
-from projection import run_projection
+from projection import run_projection, calculate_projection
 
 app = Flask(__name__)
 
@@ -392,6 +392,69 @@ def get_projection(scenario_id):
     result = run_projection(scenario_id)
     if isinstance(result, tuple):
         return jsonify(result[0]), result[1]
+    return jsonify(result)
+
+@app.route('/api/projection/preview', methods=['POST'])
+def preview_projection():
+    data = request.get_json()
+    if not data:
+        return jsonify({"error": "Invalid JSON"}), 400
+        
+    # Basic validation
+    try:
+        current_age = float(data['current_age'])
+        retirement_age = float(data['retirement_age'])
+        end_age = int(data['end_age'])
+        expenses = float(data['expected_expenses_in_retirement'])
+        withdrawal_split = float(data['withdrawal_split_pretax_pct'])
+        inflation = float(data['inflation_rate_pct'])
+        return_mode = data['return_mode']
+    except (ValueError, TypeError, KeyError):
+        return jsonify({"error": "Invalid numeric values or missing fields"}), 400
+
+    if current_age >= retirement_age or retirement_age >= end_age:
+        return jsonify({"error": "Ages must be ordered: current < retirement < end"}), 400
+    if not (0 <= withdrawal_split <= 100):
+        return jsonify({"error": "Withdrawal split must be between 0 and 100"}), 400
+    if not (-5 <= inflation <= 20):
+        return jsonify({"error": "Inflation rate must be between -5 and 20"}), 400
+
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM accounts")
+    accounts = cursor.fetchall()
+    if not accounts:
+        conn.close()
+        return jsonify({"error": "No accounts found."}), 400
+        
+    cursor.execute("SELECT year, return_pct FROM annual_returns ORDER BY year")
+    annual_returns = cursor.fetchall()
+    if not annual_returns:
+        conn.close()
+        return jsonify({"error": "No annual return data found."}), 400
+        
+    min_year, max_year = cursor.execute("SELECT MIN(year), MAX(year) FROM annual_returns").fetchone()
+    
+    if return_mode == 'mean_stdev':
+        start_year = int(data['return_start_year'])
+        end_year = int(data['return_end_year']) if data.get('return_end_year') else max_year
+        if start_year < min_year or end_year > max_year:
+            conn.close()
+            return jsonify({"error": f"Return year range must be within {min_year}-{max_year}"}), 400
+    elif return_mode == 'historical_replay':
+        replay_year = int(data['replay_start_year'])
+        if replay_year < min_year or replay_year > max_year:
+            conn.close()
+            return jsonify({"error": f"Replay start year must be within {min_year}-{max_year}"}), 400
+            
+    conn.close()
+    
+    accounts_list = [dict(a) for a in accounts]
+    returns_list = [dict(r) for r in annual_returns]
+    
+    result = calculate_projection(data, accounts_list, returns_list)
+    if "error" in result:
+        return jsonify(result), 400
     return jsonify(result)
 
 if __name__ == '__main__':

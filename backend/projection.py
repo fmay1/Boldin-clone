@@ -84,37 +84,18 @@ def _run_monthly_simulation(start_year, current_age, retirement_age, end_age, ex
             
     return results_by_age, early_pretax_access_age
 
-def run_projection(scenario_id):
-    conn = get_connection()
-    cursor = conn.cursor()
-    
-    cursor.execute("SELECT * FROM scenarios WHERE id = ?", (scenario_id,))
-    scenario = cursor.fetchone()
-    if not scenario:
-        conn.close()
-        return {"error": "Scenario not found"}, 404
-        
-    cursor.execute("SELECT * FROM accounts")
-    accounts = cursor.fetchall()
-    if not accounts:
-        conn.close()
-        return {"error": "No accounts found. Please add accounts before running a projection."}, 400
-        
-    cursor.execute("SELECT year, return_pct FROM annual_returns ORDER BY year")
-    annual_returns = cursor.fetchall()
-    if not annual_returns:
-        conn.close()
-        return {"error": "No annual return data found. Please upload historical returns."}, 400
-        
-    conn.close()
-    
-    current_age = scenario['current_age']
-    retirement_age = scenario['retirement_age']
-    end_age = scenario['end_age']
-    expenses = scenario['expected_expenses_in_retirement']
-    withdrawal_split_pretax_pct = scenario['withdrawal_split_pretax_pct']
-    inflation_rate = scenario['inflation_rate_pct'] / 100.0
-    return_mode = scenario['return_mode']
+def calculate_projection(scenario_data, accounts, annual_returns):
+    """
+    Core projection calculation. Accepts scenario parameters, accounts, and returns as dicts/lists.
+    Returns a result dict (with 'results', 'warning', 'early_access_warning') or an error dict.
+    """
+    current_age = float(scenario_data['current_age'])
+    retirement_age = float(scenario_data['retirement_age'])
+    end_age = int(scenario_data['end_age'])
+    expenses = float(scenario_data['expected_expenses_in_retirement'])
+    withdrawal_split_pretax_pct = float(scenario_data['withdrawal_split_pretax_pct'])
+    inflation_rate = float(scenario_data['inflation_rate_pct']) / 100.0
+    return_mode = scenario_data['return_mode']
     
     returns_by_year = {r['year']: r['return_pct'] for r in annual_returns}
     last_data_year = max(returns_by_year.keys())
@@ -139,17 +120,19 @@ def run_projection(scenario_id):
     contrib_pretax = sum(a['annual_contribution'] for a in accounts if a['type'] == 'pre-tax')
     
     if return_mode == 'mean_stdev':
-        start_year = scenario['return_start_year']
-        end_year = scenario['return_end_year']
-        if end_year is None:
+        start_year = int(scenario_data['return_start_year'])
+        end_year = scenario_data.get('return_end_year')
+        if end_year is not None:
+            end_year = int(end_year)
+        else:
             end_year = last_data_year
             
         if start_year > end_year:
-            return {"error": "Return start year must be less than or equal to return end year."}, 400
+            return {"error": "Return start year must be less than or equal to return end year."}
             
         eligible_years = [y for y in returns_by_year.keys() if start_year <= y <= end_year]
         if not eligible_years:
-            return {"error": "No return data found in the selected year range."}, 400
+            return {"error": "No return data found in the selected year range."}
             
         results_by_age = {A: [] for A in target_ages}
         min_early_access_age = None
@@ -229,9 +212,9 @@ def run_projection(scenario_id):
         }
             
     elif return_mode == 'historical_replay':
-        start_year = scenario['replay_start_year']
-        if start_year is None or start_year not in returns_by_year:
-            return {"error": "Invalid replay start year."}, 400
+        start_year = int(scenario_data['replay_start_year'])
+        if start_year not in returns_by_year:
+            return {"error": "Invalid replay start year."}
             
         sim_results, early_age = _run_monthly_simulation(
             start_year, current_age, retirement_age, end_age, expenses, withdrawal_split_pretax_pct,
@@ -272,4 +255,33 @@ def run_projection(scenario_id):
         }
         
     else:
-        return {"error": "Unsupported return mode."}, 400
+        return {"error": "Unsupported return mode."}
+
+def run_projection(scenario_id):
+    conn = get_connection()
+    cursor = conn.cursor()
+    
+    cursor.execute("SELECT * FROM scenarios WHERE id = ?", (scenario_id,))
+    scenario = cursor.fetchone()
+    if not scenario:
+        conn.close()
+        return {"error": "Scenario not found"}, 404
+        
+    cursor.execute("SELECT * FROM accounts")
+    accounts = cursor.fetchall()
+    if not accounts:
+        conn.close()
+        return {"error": "No accounts found. Please add accounts before running a projection."}, 400
+        
+    cursor.execute("SELECT year, return_pct FROM annual_returns ORDER BY year")
+    annual_returns = cursor.fetchall()
+    if not annual_returns:
+        conn.close()
+        return {"error": "No annual return data found. Please upload historical returns."}, 400
+        
+    conn.close()
+    
+    result = calculate_projection(dict(scenario), [dict(a) for a in accounts], [dict(r) for r in annual_returns])
+    if "error" in result:
+        return result, 400
+    return result

@@ -151,8 +151,9 @@ Given this stack (Python/Flask, React, SQLite), the following should never be co
   - `models.py` (optional) — plain data structures matching Section 4's entities, not an ORM
 - **Frontend** (React):
   - Accounts view (add/edit/delete accounts)
-  - Scenarios view (create/edit/delete scenarios, select scenarios for comparison)
-  - Results view (charts via Recharts, tables, confidence bands, depletion flags)
+  - Scenarios view (create/edit/delete scenarios, select scenarios to view or compare)
+  - Results view (single scenario at a time — charts via Recharts, tables, confidence bands for mean/stdev mode, depletion/warning flags)
+  - Comparisons view (multiple scenarios overlaid — means only, no confidence bands or table detail, so mean_stdev and historical_replay scenarios can be compared side by side on equal footing)
 - **Data flow**: Frontend sends account/scenario data to backend via API → backend saves to SQLite. When viewing results, frontend requests a projection → backend runs `projection.py` fresh using current DB data → returns computed year-by-year results → frontend renders as chart/table. Nothing is computed client-side except UI state.
 
 ## 8. Tech Stack
@@ -182,13 +183,20 @@ Given this stack (Python/Flask, React, SQLite), the following should never be co
 2. Enter: name, current age, retirement age, end age, expected retirement expenses, withdrawal split %, inflation rate %, and return mode (mean/stdev with a year range, or historical replay with a start year)
 3. Save — scenario appears in a list
 
-**Flow 4: Viewing/comparing results**
-1. From the Scenarios list, select one or more scenarios to view
-2. App calls the backend, which runs the projection fresh for each selected scenario. For mean/stdev mode, this means running the full rolling-window simulation described in Section 4a (one simulation per eligible starting year, aggregated per forward year into mean + confidence bands). For historical replay mode, it means the single replayed sequence. Either way: contributions until retirement → withdrawals after, per the 59.5 rule and account type.
+**Flow 4: Viewing a single scenario's full results**
+1. From the Scenarios list, select one scenario to view
+2. App calls the backend, which runs the projection fresh. For mean/stdev mode, this means running the full rolling-window simulation described in Section 4a (one simulation per eligible starting year, aggregated per forward year into mean + confidence bands). For historical replay mode, it means the single replayed sequence. Either way: contributions until retirement → withdrawals after, per the 59.5 rule and account type.
 2a. If mean/stdev mode can't cover the full projection horizon with available data, a warning is shown alongside the results (see Section 4a, Step 4), and the chart/table simply stops wherever data runs out.
-3. Results shown as a chart (balance over time, one line per scenario) and a table
-4. If mean/stdev mode, chart also shows a shaded confidence band
+3. Results shown as a chart (balance over time) and a table
+4. If mean/stdev mode, chart also shows a shaded confidence band; historical replay mode shows a single line only (no band, since there's nothing to aggregate)
 5. Contributions stop and withdrawals begin automatically once `retirement_age` is reached, driven by the projection logic (not stored as separate account data)
+
+**Flow 5: Comparing multiple scenarios**
+1. From the Scenarios list, select two or more scenarios (any mix of mean_stdev and historical_replay) to compare
+2. App calls the backend for each selected scenario's projection, same underlying calculation as Flow 4
+3. Results shown as a single chart with one **mean-only** line per scenario, overlaid — no confidence bands, no table, regardless of each scenario's return mode. This keeps mean_stdev and historical_replay scenarios visually comparable on equal footing, since only historical_replay's single-line data exists for both.
+4. Any warnings from the underlying calculation (data-coverage cutoff, depletion, early pre-tax access) are still shown per scenario, just without the full CI/table detail — comparisons is a simplified view, not a simplified warning system.
+5. For full detail on any one scenario shown in the comparison, the user returns to Flow 4's single-scenario Results view for that scenario.
 
 ## 10. Edge Cases & Error Handling
 
@@ -255,7 +263,7 @@ Unless there's a specific, stated reason otherwise:
 5. **Core projection engine (mean/stdev mode only)** — `projection.py` logic implementing the full rolling-window historical simulation from Section 4a: one simulation per eligible starting year, contributions/withdrawals applied before growth each year, aggregated per forward year into mean + z-score confidence bands (50%/70%/95%). Floors at zero on depletion, flags depletion age, warns if data can't cover the full projection horizon. Exposed via backend API route; not yet wired to frontend (backend only, no UI styling concerns).
 6. **Results view (single scenario, mean/stdev mode)** — React "Results" page calling the projection API for one scenario, rendering a chart (Recharts, with confidence band) and a table. Basic styling included.
 7. **Historical replay mode** — Add the second return calculation mode to `projection.py` (replay actual historical sequence from a chosen start year), selectable per scenario, reflected in the Results view.
-8. **Multi-scenario comparison** — Extend the Results view to select multiple scenarios and see them overlaid/side-by-side (chart + table). Basic styling included.
+8. **Comparisons tab** — New, separate frontend view (not an extension of the Results page). Lets you select multiple scenarios (any mix of mean_stdev/historical_replay) and see them overlaid on one chart as mean-only lines, per Flow 5 — no confidence bands, no table. Per-scenario warnings (data-coverage cutoff, depletion, early pre-tax access) still shown. The single-scenario Results view (step 6) is left untouched, keeping full CI/table detail for one scenario at a time. Basic styling included.
 9. **Final visual consistency pass** — Lighter than a full redo: unify colors/typography/spacing across all pages, refine chart presentation, address inconsistencies now that everything exists together, to meet the "looks like real retirement software" bar from Section 3.
 
 ## 15. Open Questions
@@ -287,6 +295,8 @@ None currently — everything raised during planning was resolved into a decisio
 - Added support for fractional `current_age`/`retirement_age` (monthly precision, e.g. 46.25) since a short pre-retirement window makes whole-year rounding meaningfully inaccurate. This required restructuring Section 4a's Step 2 from a year-then-month nested loop into a single month-based loop, with the contribution/withdrawal phase (and the 59.5 withdrawal-source check) re-evaluated every month instead of once per year — this is what allows retirement to fall mid-year. `end_age` stays a whole number, since horizon-level precision doesn't matter the same way.
 - Discovered that `historical_replay` mode's numbers had drifted out of sync with `mean_stdev` mode's — while `mean_stdev` had been repeatedly fixed (monthly compounding, geometric rate conversion, pre-59.5 fallback, fractional retirement age), `historical_replay` likely wasn't updated alongside it, suggesting it was implemented as a separate code path rather than sharing logic. Restructured Section 4a to make explicit that both modes must share the exact same per-simulation function (Step 2) — the only difference between them is Step 1 (one starting year vs. many) and Step 3 (whether results get aggregated). This should prevent the two modes from drifting apart again in the future; the app's code needs a corresponding refactor so `historical_replay` calls the same simulation function as `mean_stdev`, rather than a separate implementation.
 - Found (and fixed in the spec) a real bug affecting any simulation with a fractional `current_age`: historical years were being assigned to months using raw elapsed-month count (`S + floor(elapsed_months / 12)`), which only works cleanly when every period is exactly 12 months. With a fractional `current_age` (short first period), this caused two different calendar years' returns to blend within a single reporting period — verified independently against the real CSV, producing visibly nonsensical results (e.g. a "2008 return" period that was actually part-2007/part-2008, masking the real 2008 crash). Fixed by assigning exactly one historical year per reporting *period* (`S + period_index`), regardless of that period's length — the first period may be shorter than 12 months, but it still gets exactly one historical year's return, applied for however many months that period spans.
+- Split "viewing results" into two separate frontend views instead of one extended Results page: a single-scenario Results view (full detail — confidence bands for mean_stdev, table) and a separate Comparisons view (multiple scenarios overlaid, mean-only lines, no bands/table). Reason: mean_stdev scenarios produce confidence-band data that historical_replay scenarios don't have, so a unified comparison view would need to handle two different data shapes awkwardly. Showing means only in Comparisons sidesteps that entirely, at the cost of losing CI detail when comparing — full detail is still available by returning to the single-scenario Results view.
+- Considered skipping multi-scenario comparison (Build Order step 8) in favor of relying on the not-yet-built live-dial interaction (see Future Ideas) instead. Decided against it: comparison (seeing multiple full trajectories at once) and live single-scenario tweaking solve different problems, and comparison was deliberately pulled into MVP early on specifically because it's core to a near-retirement decision — skipping it would reverse that earlier decision without a strong enough reason. Comparison (step 8) proceeds as planned.
 
 ## 17. Success Criteria
 
@@ -308,7 +318,8 @@ None currently — everything raised during planning was resolved into a decisio
 - [ ] Try to create a scenario where `retirement_age` ≤ `current_age` — rejected with a clear validation message
 - [ ] View results for a single scenario in mean/stdev mode — chart shows a projected line with a confidence band, table shows year-by-year balances
 - [ ] View results for a scenario in historical replay mode — chart reflects the actual replayed sequence of returns
-- [ ] Compare two scenarios side by side — both appear correctly, distinguishable from each other
+- [ ] Compare two scenarios side by side in the Comparisons tab — both appear as mean-only lines, distinguishable from each other, no CI bands shown
+- [ ] Compare one mean_stdev scenario against one historical_replay scenario in the Comparisons tab — both display correctly on equal footing (mean-only), despite having different underlying data shapes
 - [ ] Set up a scenario deliberately designed to deplete funds early — balance floors at zero, "funds depleted at age X" is shown
 - [ ] Try to view a projection with no accounts entered — clear message shown, not a crash/blank screen
 - [ ] Try to view a projection with no historical return data uploaded — clear message shown, not a crash

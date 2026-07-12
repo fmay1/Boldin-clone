@@ -1,11 +1,14 @@
 import math
 from database import get_connection
 
-def _run_monthly_simulation(start_year, current_age, retirement_age, end_age, expenses, withdrawal_split_pretax_pct, inflation_rate, initial_post_tax, initial_pretax, contrib_post_tax, contrib_pretax, returns_by_year, last_data_year, target_months):
+def _run_monthly_simulation(start_year, current_age, retirement_age, end_age, expenses, withdrawal_split_pretax_pct, inflation_rate, initial_post_tax, initial_pretax, contrib_post_tax, contrib_pretax, returns_by_year, last_data_year, target_months, expenditures=None):
     """
     Runs a single monthly simulation starting from a given historical year.
     Returns a dict of {target_age: {combined, post_tax, pretax}} and the early_pretax_access_age if any.
     """
+    if expenditures is None:
+        expenditures = []
+        
     post_tax = initial_post_tax
     pretax = initial_pretax
     early_pretax_access_age = None
@@ -48,6 +51,53 @@ def _run_monthly_simulation(start_year, current_age, retirement_age, end_age, ex
             
         post_tax *= (1 + monthly_rate)
         pretax *= (1 + monthly_rate)
+        
+        # Handle one-time expenditures at this exact month
+        for exp in expenditures:
+            target_month = round((exp['age'] - current_age) * 12)
+            if target_month == m:
+                if exp.get('inflation_adjusted'):
+                    elapsed_years = m / 12.0
+                    exp_amount = exp['amount'] * ((1 + inflation_rate) ** elapsed_years)
+                else:
+                    exp_amount = exp['amount']
+                
+                if age_this_month < 59.5:
+                    if post_tax >= exp_amount:
+                        post_tax -= exp_amount
+                    else:
+                        shortfall = exp_amount - post_tax
+                        post_tax = 0.0
+                        if pretax >= shortfall:
+                            pretax -= shortfall
+                        else:
+                            pretax = 0.0
+                        if early_pretax_access_age is None:
+                            early_pretax_access_age = age_this_month
+                else:
+                    pretax_withdrawal = exp_amount * (withdrawal_split_pretax_pct / 100.0)
+                    posttax_withdrawal = exp_amount * (1.0 - withdrawal_split_pretax_pct / 100.0)
+                    
+                    if pretax >= pretax_withdrawal:
+                        pretax -= pretax_withdrawal
+                    else:
+                        pretax_shortfall = pretax_withdrawal - pretax
+                        pretax = 0.0
+                        if post_tax >= pretax_shortfall:
+                            post_tax -= pretax_shortfall
+                        else:
+                            pretax_shortfall -= post_tax
+                            post_tax = 0.0
+                            
+                    if post_tax >= posttax_withdrawal:
+                        post_tax -= posttax_withdrawal
+                    else:
+                        post_shortfall = posttax_withdrawal - post_tax
+                        post_tax = 0.0
+                        if pretax >= post_shortfall:
+                            pretax -= post_shortfall
+                        else:
+                            pretax = 0.0
         
         if is_pre_retirement:
             post_tax += monthly_contrib_post
@@ -105,11 +155,14 @@ def _run_monthly_simulation(start_year, current_age, retirement_age, end_age, ex
             
     return results_by_age, early_pretax_access_age
 
-def calculate_projection(scenario_data, accounts, annual_returns):
+def calculate_projection(scenario_data, accounts, annual_returns, expenditures=None):
     """
     Core projection calculation. Accepts scenario parameters, accounts, and returns as dicts/lists.
     Returns a result dict (with 'results', 'warning', 'early_access_warning') or an error dict.
     """
+    if expenditures is None:
+        expenditures = []
+        
     current_age = float(scenario_data['current_age'])
     retirement_age = float(scenario_data['retirement_age'])
     end_age = int(scenario_data['end_age'])
@@ -164,7 +217,7 @@ def calculate_projection(scenario_data, accounts, annual_returns):
             sim_results, early_age = _run_monthly_simulation(
                 S, current_age, retirement_age, end_age, expenses, withdrawal_split_pretax_pct,
                 inflation_rate, initial_post_tax, initial_pretax, contrib_post_tax, contrib_pretax,
-                returns_by_year, last_data_year, target_months
+                returns_by_year, last_data_year, target_months, expenditures
             )
             
             for target_age in target_ages:
@@ -240,7 +293,7 @@ def calculate_projection(scenario_data, accounts, annual_returns):
         sim_results, early_age = _run_monthly_simulation(
             start_year, current_age, retirement_age, end_age, expenses, withdrawal_split_pretax_pct,
             inflation_rate, initial_post_tax, initial_pretax, contrib_post_tax, contrib_pretax,
-            returns_by_year, last_data_year, target_months
+            returns_by_year, last_data_year, target_months, expenditures
         )
         
         final_results = []
@@ -300,9 +353,12 @@ def run_projection(scenario_id):
         conn.close()
         return {"error": "No annual return data found. Please upload historical returns."}, 400
         
+    cursor.execute("SELECT amount, age, inflation_adjusted FROM scenario_expenditures WHERE scenario_id = ?", (scenario_id,))
+    expenditures = [dict(e) for e in cursor.fetchall()]
+        
     conn.close()
     
-    result = calculate_projection(dict(scenario), [dict(a) for a in accounts], [dict(r) for r in annual_returns])
+    result = calculate_projection(dict(scenario), [dict(a) for a in accounts], [dict(r) for r in annual_returns], expenditures)
     if "error" in result:
         return result, 400
     return result

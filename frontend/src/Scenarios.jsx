@@ -33,6 +33,9 @@ function Scenarios() {
   const [editReturnStartYear, setEditReturnStartYear] = useState('')
   const [editReturnEndYear, setEditReturnEndYear] = useState('')
   const [editReplayStartYear, setEditReplayStartYear] = useState('')
+  
+  // Expenditures state
+  const [expenditures, setExpenditures] = useState([])
 
   const isValidMonthlyPrecision = (val) => {
     const num = parseFloat(val)
@@ -81,6 +84,7 @@ function Scenarios() {
     setEditReturnStartYear('')
     setEditReturnEndYear('')
     setEditReplayStartYear('')
+    setExpenditures([])
     setSuccess('')
     setError('')
   }
@@ -142,6 +146,12 @@ function Scenarios() {
     setEditReturnStartYear(scenario.return_start_year)
     setEditReturnEndYear(scenario.return_end_year)
     setEditReplayStartYear(scenario.replay_start_year)
+    setExpenditures((scenario.expenditures || []).map(e => ({
+      id: e.id,
+      amount: e.amount,
+      age: e.age,
+      inflationAdjusted: !!e.inflation_adjusted
+    })))
     setError('')
     setSuccess('')
   }
@@ -199,6 +209,21 @@ function Scenarios() {
     } catch (err) {
       setError(err.message)
     }
+  }
+
+  const addExpenditure = () => {
+    if (expenditures.length >= 10) return
+    setExpenditures([...expenditures, { id: null, amount: 0, age: '', inflationAdjusted: false }])
+  }
+
+  const updateExpenditure = (index, field, value) => {
+    const updated = [...expenditures]
+    updated[index] = { ...updated[index], [field]: value }
+    setExpenditures(updated)
+  }
+
+  const removeExpenditure = (index) => {
+    setExpenditures(expenditures.filter((_, i) => i !== index))
   }
 
   if (loading) return <div className="scenarios-container"><p>Loading scenarios...</p></div>
@@ -326,6 +351,51 @@ function Scenarios() {
             />
           </div>
         )}
+
+        <div className="expenditures-section">
+          <h3>Planned Large Expenditures</h3>
+          {expenditures.map((exp, index) => (
+            <div key={index} className="expenditure-row">
+              <span className="exp-display">
+                ${exp.amount ? exp.amount.toLocaleString() : '0'} at age {exp.age || '—'} ({exp.inflationAdjusted ? 'inflated' : 'fixed'})
+              </span>
+              <input
+                type="number"
+                step="0.01"
+                value={exp.amount}
+                onChange={(e) => updateExpenditure(index, 'amount', parseFloat(e.target.value) || 0)}
+                placeholder="Amount"
+                className="exp-input"
+              />
+              <input
+                type="number"
+                step="0.01"
+                value={exp.age}
+                onChange={(e) => updateExpenditure(index, 'age', e.target.value)}
+                placeholder="Age"
+                className="exp-input"
+              />
+              <label className="exp-checkbox">
+                <input
+                  type="checkbox"
+                  checked={exp.inflationAdjusted}
+                  onChange={(e) => updateExpenditure(index, 'inflationAdjusted', e.target.checked)}
+                />
+                Inflation Adjusted
+              </label>
+              <button type="button" className="edit-exp-btn" title="Edit">✎</button>
+              <button type="button" onClick={() => removeExpenditure(index)} className="delete-exp-btn" title="Delete">×</button>
+            </div>
+          ))}
+          <button
+            type="button"
+            onClick={addExpenditure}
+            disabled={expenditures.length >= 10}
+            className="add-exp-btn"
+          >
+            + Add Expenditure
+          </button>
+        </div>
 
         <button type="submit">{editingId ? 'Update Scenario' : 'Add Scenario'}</button>
         {editingId && <button type="button" onClick={resetForm} className="cancel-btn">Cancel</button>}

@@ -26,8 +26,8 @@ def init_db():
         CREATE TABLE IF NOT EXISTS scenarios (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             name TEXT NOT NULL,
-            current_age INTEGER NOT NULL,
-            retirement_age INTEGER NOT NULL,
+            current_age REAL NOT NULL,
+            retirement_age REAL NOT NULL,
             end_age INTEGER NOT NULL,
             expected_expenses_in_retirement REAL NOT NULL,
             withdrawal_split_pretax_pct REAL NOT NULL CHECK(withdrawal_split_pretax_pct >= 0 AND withdrawal_split_pretax_pct <= 100),

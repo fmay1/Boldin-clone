@@ -282,6 +282,19 @@ def create_scenario():
     )
     conn.commit()
     scenario_id = cursor.lastrowid
+    
+    # Copy expenditures if requested
+    if data.get('copy_expenditures') is True and data.get('source_scenario_id'):
+        source_id = data['source_scenario_id']
+        cursor.execute("SELECT amount, age, inflation_adjusted FROM scenario_expenditures WHERE scenario_id = ?", (source_id,))
+        source_exps = cursor.fetchall()
+        for exp in source_exps:
+            cursor.execute(
+                "INSERT INTO scenario_expenditures (scenario_id, amount, age, inflation_adjusted) VALUES (?, ?, ?, ?)",
+                (scenario_id, exp[0], exp[1], exp[2])
+            )
+        conn.commit()
+        
     conn.close()
     return jsonify({"id": scenario_id, "message": "Scenario created"}), 201
 

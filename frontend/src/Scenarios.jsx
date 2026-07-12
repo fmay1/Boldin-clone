@@ -255,6 +255,52 @@ function Scenarios() {
     }
   }
 
+  const handleSaveAsNew = async () => {
+    setError('')
+    setSuccess('')
+
+    if (!isValidMonthlyPrecision(editCurrentAge)) {
+      setError('Current age must correspond to a whole number of months (e.g., 46.25)')
+      return
+    }
+    if (!isValidMonthlyPrecision(editRetirementAge)) {
+      setError('Retirement age must correspond to a whole number of months (e.g., 46.25)')
+      return
+    }
+
+    const payload = {
+      name: editName.trim(),
+      current_age: parseFloat(editCurrentAge),
+      retirement_age: parseFloat(editRetirementAge),
+      end_age: parseFloat(editEndAge),
+      expected_expenses_in_retirement: parseFloat(editExpenses),
+      withdrawal_split_pretax_pct: parseFloat(editWithdrawalSplit),
+      inflation_rate_pct: parseFloat(editInflationRate),
+      return_mode: editReturnMode,
+      return_start_year: editReturnMode === 'mean_stdev' ? parseFloat(editReturnStartYear) : null,
+      return_end_year: editReturnMode === 'mean_stdev' && editReturnEndYear ? parseFloat(editReturnEndYear) : null,
+      replay_start_year: editReturnMode === 'historical_replay' ? parseFloat(editReplayStartYear) : null,
+      copy_expenditures: true,
+      source_scenario_id: editingId
+    }
+
+    try {
+      const res = await fetch('/api/scenarios', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Failed to create scenario')
+      
+      setSuccess('New scenario created')
+      resetForm()
+      fetchScenarios()
+    } catch (err) {
+      setError(err.message)
+    }
+  }
+
   const handleDelete = async (id) => {
     if (!window.confirm('Are you sure you want to delete this scenario?')) return
     try {
@@ -453,7 +499,12 @@ function Scenarios() {
         </div>
 
         <button type="submit">{editingId ? 'Update Scenario' : 'Add Scenario'}</button>
-        {editingId && <button type="button" onClick={resetForm} className="cancel-btn">Cancel</button>}
+        {editingId && (
+          <>
+            <button type="button" onClick={handleSaveAsNew} style={{ background: '#cce5ff', marginLeft: '10px' }}>Save as New Scenario</button>
+            <button type="button" onClick={resetForm} className="cancel-btn" style={{ marginLeft: '10px' }}>Cancel</button>
+          </>
+        )}
       </form>
 
       <div className="scenarios-list">

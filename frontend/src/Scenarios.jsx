@@ -495,7 +495,6 @@ function Scenarios() {
                 />
                 Inflation Adjusted
               </label>
-              <button type="button" className="edit-exp-btn" title="Edit">✎</button>
               <button type="button" onClick={() => removeExpenditure(index)} className="delete-exp-btn" title="Delete">×</button>
             </div>
           ))}

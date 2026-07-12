@@ -52,13 +52,29 @@ function Live() {
     }))
   }
 
+  const isValidMonthlyPrecision = (val) => {
+    const num = parseFloat(val)
+    if (isNaN(num)) return false
+    return Math.abs((num * 12) - Math.round(num * 12)) < 1e-9
+  }
+
   const handleUpdate = async () => {
     if (!selectedId) return
-    setLoading(true)
     setError('')
     setWarning('')
     setEarlyAccessWarning('')
     setResults([])
+    
+    if (!isValidMonthlyPrecision(formData.current_age)) {
+      setError('Current age must correspond to a whole number of months (e.g., 46.25)')
+      return
+    }
+    if (!isValidMonthlyPrecision(formData.retirement_age)) {
+      setError('Retirement age must correspond to a whole number of months (e.g., 46.25)')
+      return
+    }
+
+    setLoading(true)
     
     try {
       const res = await fetch('/api/projection/preview', {
@@ -83,6 +99,17 @@ function Live() {
 
   const handleSave = async () => {
     if (!selectedId) return
+    setError('')
+    
+    if (!isValidMonthlyPrecision(formData.current_age)) {
+      setError('Current age must correspond to a whole number of months (e.g., 46.25)')
+      return
+    }
+    if (!isValidMonthlyPrecision(formData.retirement_age)) {
+      setError('Retirement age must correspond to a whole number of months (e.g., 46.25)')
+      return
+    }
+
     setSaving(true)
     try {
       const res = await fetch(`/api/scenarios/${selectedId}`, {

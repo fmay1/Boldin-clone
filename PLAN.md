@@ -278,6 +278,7 @@ Unless there's a specific, stated reason otherwise:
 **— MVP complete after step 9 —**
 
 10. **Live tweaking page** — New backend "preview" endpoint (computes a projection from parameters passed directly in the request, no database write). New frontend "Live" page: scenario picker to pre-fill an editable form (all Scenario fields), an "Update" button that calls the preview endpoint and displays results at the same detail level as the single-scenario Results view, and a separate "Save changes to this scenario" action that writes back via the existing scenario update endpoint. Per Flow 6.
+11. **Planned large expenditures** — New `scenario_expenditures` table (one-to-many with scenarios): `id`, `scenario_id` (FK), `amount` (today's dollars), `age` (decimal, monthly precision), `inflation_adjusted` (boolean). Backend CRUD routes (`POST/PUT/DELETE /api/scenarios/<id>/expenditures`) with max 10 per scenario; GET `/api/scenarios` returns nested expenditures array. Projection engine modified to withdraw each expenditure at its target month using the same pre-59.5/after-59.5 withdrawal rules (post-tax only before 59.5 with pre-tax fallback, split after). Frontend: expandable list in scenario form — single line per expenditure with `+` button to add more, inline editable amount/age/inflation toggle, delete icon.
 
 ## 15. Open Questions
 

@@ -36,6 +36,7 @@ function Scenarios() {
   
   // Expenditures state
   const [expenditures, setExpenditures] = useState([])
+  const [originalExpenditureIds, setOriginalExpenditureIds] = useState([])
 
   const isValidMonthlyPrecision = (val) => {
     const num = parseFloat(val)
@@ -85,6 +86,7 @@ function Scenarios() {
     setEditReturnEndYear('')
     setEditReplayStartYear('')
     setExpenditures([])
+    setOriginalExpenditureIds([])
     setSuccess('')
     setError('')
   }
@@ -114,7 +116,8 @@ function Scenarios() {
       return_mode: returnMode,
       return_start_year: returnMode === 'mean_stdev' ? parseFloat(returnStartYear) : null,
       return_end_year: returnMode === 'mean_stdev' && returnEndYear ? parseFloat(returnEndYear) : null,
-      replay_start_year: returnMode === 'historical_replay' ? parseFloat(replayStartYear) : null
+      replay_start_year: returnMode === 'historical_replay' ? parseFloat(replayStartYear) : null,
+      expenditures: expenditures
     }
 
     try {
@@ -125,6 +128,20 @@ function Scenarios() {
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'Failed to create scenario')
+      
+      // Create expenditures for the new scenario
+      for (const exp of expenditures) {
+        await fetch(`/api/scenarios/${data.id}/expenditures`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            amount: parseFloat(exp.amount) || 0,
+            age: parseFloat(exp.age),
+            inflation_adjusted: exp.inflationAdjusted ? 1 : 0
+          })
+        })
+      }
+      
       setSuccess('Scenario created successfully')
       resetForm()
       fetchScenarios()
@@ -146,12 +163,16 @@ function Scenarios() {
     setEditReturnStartYear(scenario.return_start_year)
     setEditReturnEndYear(scenario.return_end_year)
     setEditReplayStartYear(scenario.replay_start_year)
-    setExpenditures((scenario.expenditures || []).map(e => ({
+    
+    const exps = (scenario.expenditures || []).map(e => ({
       id: e.id,
       amount: e.amount,
       age: e.age,
       inflationAdjusted: !!e.inflation_adjusted
-    })))
+    }))
+    setExpenditures(exps)
+    setOriginalExpenditureIds(exps.map(e => e.id))
+    
     setError('')
     setSuccess('')
   }
@@ -185,6 +206,39 @@ function Scenarios() {
     }
 
     try {
+      // Sync expenditures first
+      const currentIds = expenditures.map(e => e.id).filter(Boolean)
+      const deletedIds = originalExpenditureIds.filter(id => !currentIds.includes(id))
+      
+      // Delete removed expenditures
+      for (const id of deletedIds) {
+        await fetch(`/api/scenarios/${editingId}/expenditures/${id}`, { method: 'DELETE' })
+      }
+      
+      // Update existing and create new expenditures
+      for (const exp of expenditures) {
+        const body = {
+          amount: parseFloat(exp.amount) || 0,
+          age: parseFloat(exp.age),
+          inflation_adjusted: exp.inflationAdjusted ? 1 : 0
+        }
+        
+        if (exp.id) {
+          await fetch(`/api/scenarios/${editingId}/expenditures/${exp.id}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body)
+          })
+        } else {
+          await fetch(`/api/scenarios/${editingId}/expenditures`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body)
+          })
+        }
+      }
+
+      // Update scenario itself
       const res = await fetch(`/api/scenarios/${editingId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
@@ -192,6 +246,7 @@ function Scenarios() {
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'Failed to update scenario')
+      
       setSuccess('Scenario updated successfully')
       resetForm()
       fetchScenarios()

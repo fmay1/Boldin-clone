@@ -11,6 +11,8 @@ function Live() {
   const [warning, setWarning] = useState('')
   const [earlyAccessWarning, setEarlyAccessWarning] = useState('')
   const [saving, setSaving] = useState(false)
+  const [expenditures, setExpenditures] = useState([])
+  const [originalExpenditureIds, setOriginalExpenditureIds] = useState([])
 
   useEffect(() => {
     fetch('/api/scenarios')
@@ -37,6 +39,14 @@ function Live() {
         return_end_year: scenario.return_end_year,
         replay_start_year: scenario.replay_start_year
       })
+      const exps = (scenario.expenditures || []).map(e => ({
+        id: e.id,
+        amount: e.amount,
+        age: e.age,
+        inflationAdjusted: !!e.inflation_adjusted
+      }))
+      setExpenditures(exps)
+      setOriginalExpenditureIds(exps.map(e => e.id))
       setResults([])
       setError('')
       setWarning('')
@@ -77,10 +87,11 @@ function Live() {
     setLoading(true)
     
     try {
+      const payload = { ...formData, expenditures: expenditures }
       const res = await fetch('/api/projection/preview', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(formData)
+        body: JSON.stringify(payload)
       })
       const data = await res.json()
       if (data.error) {
@@ -112,6 +123,36 @@ function Live() {
 
     setSaving(true)
     try {
+      // Sync expenditures first
+      const currentIds = expenditures.map(e => e.id).filter(Boolean)
+      const deletedIds = originalExpenditureIds.filter(id => !currentIds.includes(id))
+      
+      for (const id of deletedIds) {
+        await fetch(`/api/scenarios/${selectedId}/expenditures/${id}`, { method: 'DELETE' })
+      }
+      
+      for (const exp of expenditures) {
+        const body = {
+          amount: parseFloat(exp.amount) || 0,
+          age: parseFloat(exp.age),
+          inflation_adjusted: exp.inflationAdjusted ? 1 : 0
+        }
+        
+        if (exp.id) {
+          await fetch(`/api/scenarios/${selectedId}/expenditures/${exp.id}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body)
+          })
+        } else {
+          await fetch(`/api/scenarios/${selectedId}/expenditures`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body)
+          })
+        }
+      }
+
       const res = await fetch(`/api/scenarios/${selectedId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
@@ -129,6 +170,21 @@ function Live() {
     } finally {
       setSaving(false)
     }
+  }
+
+  const addExpenditure = () => {
+    if (expenditures.length >= 10) return
+    setExpenditures([...expenditures, { id: null, amount: 0, age: '', inflationAdjusted: false }])
+  }
+
+  const updateExpenditure = (index, field, value) => {
+    const updated = [...expenditures]
+    updated[index] = { ...updated[index], [field]: value }
+    setExpenditures(updated)
+  }
+
+  const removeExpenditure = (index) => {
+    setExpenditures(expenditures.filter((_, i) => i !== index))
   }
 
   const formatCurrency = (val) => {
@@ -213,6 +269,47 @@ function Live() {
               <input type="number" name="replay_start_year" value={formData.replay_start_year || ''} onChange={handleInputChange} />
             </div>
           )}
+
+          <div className="expenditures-section">
+            <h3>Planned Large Expenditures</h3>
+            {expenditures.map((exp, index) => (
+              <div key={index} className="expenditure-row">
+                <input
+                  type="number"
+                  step="0.01"
+                  value={exp.amount}
+                  onChange={(e) => updateExpenditure(index, 'amount', parseFloat(e.target.value) || 0)}
+                  placeholder="Amount"
+                  className="exp-input"
+                />
+                <input
+                  type="number"
+                  step="0.01"
+                  value={exp.age}
+                  onChange={(e) => updateExpenditure(index, 'age', e.target.value)}
+                  placeholder="Age"
+                  className="exp-input"
+                />
+                <label className="exp-checkbox">
+                  <input
+                    type="checkbox"
+                    checked={exp.inflationAdjusted}
+                    onChange={(e) => updateExpenditure(index, 'inflationAdjusted', e.target.checked)}
+                  />
+                  Inflation Adjusted
+                </label>
+                <button type="button" onClick={() => removeExpenditure(index)} className="delete-exp-btn" title="Delete">×</button>
+              </div>
+            ))}
+            <button
+              type="button"
+              onClick={addExpenditure}
+              disabled={expenditures.length >= 10}
+              className="add-exp-btn"
+            >
+              + Add Expenditure
+            </button>
+          </div>
 
           <div style={{ marginTop: '15px' }}>
             <button onClick={handleUpdate} disabled={loading}>

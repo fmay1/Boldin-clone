@@ -227,37 +227,40 @@ def create_scenario():
         conn.close()
         return jsonify({"error": "Inflation rate must be between -5 and 20"}), 400
 
-    # Validate year ranges against annual_returns
-    if return_mode == 'mean_stdev':
-        start_year = int(data['return_start_year'])
-        end_year = int(data['return_end_year']) if data.get('return_end_year') is not None else None
-        if start_year is not None and end_year is not None and start_year > end_year:
-            conn.close()
-            return jsonify({"error": "Return start year must be <= end year"}), 400
+    try:
+        if return_mode == 'mean_stdev':
+            start_year = int(data['return_start_year'])
+            end_year = int(data['return_end_year']) if data.get('return_end_year') is not None else None
+            if start_year is not None and end_year is not None and start_year > end_year:
+                conn.close()
+                return jsonify({"error": "Return start year must be <= end year"}), 400
+                
+            cursor.execute("SELECT MIN(year), MAX(year) FROM annual_returns")
+            min_year, max_year = cursor.fetchone()
             
-        cursor.execute("SELECT MIN(year), MAX(year) FROM annual_returns")
-        min_year, max_year = cursor.fetchone()
-        
-        if min_year is None:
-            conn.close()
-            return jsonify({"error": "No annual return data available"}), 400
+            if min_year is None:
+                conn.close()
+                return jsonify({"error": "No annual return data available"}), 400
+                
+            if start_year < min_year or (end_year is not None and end_year > max_year):
+                conn.close()
+                return jsonify({"error": f"Return year range must be within {min_year}-{max_year}"}), 400
+                
+        elif return_mode == 'historical_replay':
+            replay_year = int(data['replay_start_year'])
+            cursor.execute("SELECT MIN(year), MAX(year) FROM annual_returns")
+            min_year, max_year = cursor.fetchone()
             
-        if start_year < min_year or (end_year is not None and end_year > max_year):
-            conn.close()
-            return jsonify({"error": f"Return year range must be within {min_year}-{max_year}"}), 400
-            
-    elif return_mode == 'historical_replay':
-        replay_year = int(data['replay_start_year'])
-        cursor.execute("SELECT MIN(year), MAX(year) FROM annual_returns")
-        min_year, max_year = cursor.fetchone()
-        
-        if min_year is None:
-            conn.close()
-            return jsonify({"error": "No annual return data available"}), 400
-            
-        if replay_year < min_year or replay_year > max_year:
-            conn.close()
-            return jsonify({"error": f"Replay start year must be within {min_year}-{max_year}"}), 400
+            if min_year is None:
+                conn.close()
+                return jsonify({"error": "No annual return data available"}), 400
+                
+            if replay_year < min_year or replay_year > max_year:
+                conn.close()
+                return jsonify({"error": f"Replay start year must be within {min_year}-{max_year}"}), 400
+    except (ValueError, TypeError, KeyError):
+        conn.close()
+        return jsonify({"error": "Missing or invalid year field for the selected return mode"}), 400
 
     cursor.execute(
         """INSERT INTO scenarios 
@@ -319,36 +322,40 @@ def update_scenario(scenario_id):
         conn.close()
         return jsonify({"error": "Inflation rate must be between -5 and 20"}), 400
 
-    if return_mode == 'mean_stdev':
-        start_year = int(data['return_start_year'])
-        end_year = int(data['return_end_year']) if data.get('return_end_year') is not None else None
-        if start_year is not None and end_year is not None and start_year > end_year:
-            conn.close()
-            return jsonify({"error": "Return start year must be <= end year"}), 400
+    try:
+        if return_mode == 'mean_stdev':
+            start_year = int(data['return_start_year'])
+            end_year = int(data['return_end_year']) if data.get('return_end_year') is not None else None
+            if start_year is not None and end_year is not None and start_year > end_year:
+                conn.close()
+                return jsonify({"error": "Return start year must be <= end year"}), 400
+                
+            cursor.execute("SELECT MIN(year), MAX(year) FROM annual_returns")
+            min_year, max_year = cursor.fetchone()
             
-        cursor.execute("SELECT MIN(year), MAX(year) FROM annual_returns")
-        min_year, max_year = cursor.fetchone()
-        
-        if min_year is None:
-            conn.close()
-            return jsonify({"error": "No annual return data available"}), 400
+            if min_year is None:
+                conn.close()
+                return jsonify({"error": "No annual return data available"}), 400
+                
+            if start_year < min_year or (end_year is not None and end_year > max_year):
+                conn.close()
+                return jsonify({"error": f"Return year range must be within {min_year}-{max_year}"}), 400
+                
+        elif return_mode == 'historical_replay':
+            replay_year = int(data['replay_start_year'])
+            cursor.execute("SELECT MIN(year), MAX(year) FROM annual_returns")
+            min_year, max_year = cursor.fetchone()
             
-        if start_year < min_year or (end_year is not None and end_year > max_year):
-            conn.close()
-            return jsonify({"error": f"Return year range must be within {min_year}-{max_year}"}), 400
-            
-    elif return_mode == 'historical_replay':
-        replay_year = int(data['replay_start_year'])
-        cursor.execute("SELECT MIN(year), MAX(year) FROM annual_returns")
-        min_year, max_year = cursor.fetchone()
-        
-        if min_year is None:
-            conn.close()
-            return jsonify({"error": "No annual return data available"}), 400
-            
-        if replay_year < min_year or replay_year > max_year:
-            conn.close()
-            return jsonify({"error": f"Replay start year must be within {min_year}-{max_year}"}), 400
+            if min_year is None:
+                conn.close()
+                return jsonify({"error": "No annual return data available"}), 400
+                
+            if replay_year < min_year or replay_year > max_year:
+                conn.close()
+                return jsonify({"error": f"Replay start year must be within {min_year}-{max_year}"}), 400
+    except (ValueError, TypeError, KeyError):
+        conn.close()
+        return jsonify({"error": "Missing or invalid year field for the selected return mode"}), 400
 
     cursor.execute(
         """UPDATE scenarios SET 
@@ -412,6 +419,12 @@ def preview_projection():
     except (ValueError, TypeError, KeyError):
         return jsonify({"error": "Invalid numeric values or missing fields"}), 400
 
+    # Validate monthly precision for current_age and retirement_age
+    if abs((current_age * 12) - round(current_age * 12)) > 1e-9:
+        return jsonify({"error": "Current age must correspond to a whole number of months (e.g., 46.25)"}), 400
+    if abs((retirement_age * 12) - round(retirement_age * 12)) > 1e-9:
+        return jsonify({"error": "Retirement age must correspond to a whole number of months (e.g., 46.25)"}), 400
+
     if current_age >= retirement_age or retirement_age >= end_age:
         return jsonify({"error": "Ages must be ordered: current < retirement < end"}), 400
     if not (0 <= withdrawal_split <= 100):
@@ -435,17 +448,21 @@ def preview_projection():
         
     min_year, max_year = cursor.execute("SELECT MIN(year), MAX(year) FROM annual_returns").fetchone()
     
-    if return_mode == 'mean_stdev':
-        start_year = int(data['return_start_year'])
-        end_year = int(data['return_end_year']) if data.get('return_end_year') else max_year
-        if start_year < min_year or end_year > max_year:
-            conn.close()
-            return jsonify({"error": f"Return year range must be within {min_year}-{max_year}"}), 400
-    elif return_mode == 'historical_replay':
-        replay_year = int(data['replay_start_year'])
-        if replay_year < min_year or replay_year > max_year:
-            conn.close()
-            return jsonify({"error": f"Replay start year must be within {min_year}-{max_year}"}), 400
+    try:
+        if return_mode == 'mean_stdev':
+            start_year = int(data['return_start_year'])
+            end_year = int(data['return_end_year']) if data.get('return_end_year') else max_year
+            if start_year < min_year or end_year > max_year:
+                conn.close()
+                return jsonify({"error": f"Return year range must be within {min_year}-{max_year}"}), 400
+        elif return_mode == 'historical_replay':
+            replay_year = int(data['replay_start_year'])
+            if replay_year < min_year or replay_year > max_year:
+                conn.close()
+                return jsonify({"error": f"Replay start year must be within {min_year}-{max_year}"}), 400
+    except (ValueError, TypeError, KeyError):
+        conn.close()
+        return jsonify({"error": "Missing or invalid year field for the selected return mode"}), 400
             
     conn.close()
     

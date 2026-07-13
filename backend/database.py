@@ -12,6 +12,15 @@ def init_db():
     conn = get_connection()
     cursor = conn.cursor()
     
+    # Check if scenarios table exists and needs constraint update for monte_carlo
+    cursor.execute("SELECT sql FROM sqlite_master WHERE type='table' AND name='scenarios'")
+    schema_row = cursor.fetchone()
+    if schema_row and 'monte_carlo' not in schema_row[0]:
+        # SQLite doesn't support altering CHECK constraints, so we recreate the table.
+        # This clears existing scenario data, which is acceptable for local dev schema updates.
+        cursor.execute("DROP TABLE IF EXISTS scenario_expenditures")
+        cursor.execute("DROP TABLE IF EXISTS scenarios")
+        
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS accounts (
             id INTEGER PRIMARY KEY AUTOINCREMENT,

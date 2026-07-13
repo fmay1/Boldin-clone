@@ -32,13 +32,20 @@ def init_db():
             expected_expenses_in_retirement REAL NOT NULL,
             withdrawal_split_pretax_pct REAL NOT NULL CHECK(withdrawal_split_pretax_pct >= 0 AND withdrawal_split_pretax_pct <= 100),
             inflation_rate_pct REAL NOT NULL CHECK(inflation_rate_pct >= -5 AND inflation_rate_pct <= 20),
-            return_mode TEXT NOT NULL CHECK(return_mode IN ('mean_stdev', 'historical_replay')),
+            return_mode TEXT NOT NULL CHECK(return_mode IN ('mean_stdev', 'historical_replay', 'monte_carlo')),
             return_start_year INTEGER,
             return_end_year INTEGER,
-            replay_start_year INTEGER
+            replay_start_year INTEGER,
+            block_length_years INTEGER
         )
     ''')
     
+    # Safely add block_length_years to existing databases without crashing
+    try:
+        cursor.execute("ALTER TABLE scenarios ADD COLUMN block_length_years INTEGER;")
+    except sqlite3.OperationalError:
+        pass  # Column already exists
+        
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS annual_returns (
             id INTEGER PRIMARY KEY AUTOINCREMENT,

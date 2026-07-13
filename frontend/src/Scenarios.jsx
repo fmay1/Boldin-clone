@@ -40,6 +40,10 @@ function Scenarios() {
   const [expenditures, setExpenditures] = useState([])
   const [originalExpenditureIds, setOriginalExpenditureIds] = useState([])
 
+  // Incomes state
+  const [incomes, setIncomes] = useState([])
+  const [originalIncomeIds, setOriginalIncomeIds] = useState([])
+
   const isValidMonthlyPrecision = (val) => {
     const num = parseFloat(val)
     if (isNaN(num)) return false
@@ -91,6 +95,8 @@ function Scenarios() {
     setEditBlockLengthYears('')
     setExpenditures([])
     setOriginalExpenditureIds([])
+    setIncomes([])
+    setOriginalIncomeIds([])
     setSuccess('')
     setError('')
   }
@@ -344,6 +350,20 @@ function Scenarios() {
 
   const removeExpenditure = (index) => {
     setExpenditures(expenditures.filter((_, i) => i !== index))
+  }
+
+  const addIncome = () => {
+    setIncomes([...incomes, { id: null, startAge: '', endAge: '', amount: 0, inflationAdjusted: false }])
+  }
+
+  const updateIncome = (index, field, value) => {
+    const updated = [...incomes]
+    updated[index] = { ...updated[index], [field]: value }
+    setIncomes(updated)
+  }
+
+  const removeIncome = (index) => {
+    setIncomes(incomes.filter((_, i) => i !== index))
   }
 
   if (loading) return <div className="scenarios-container"><p>Loading scenarios...</p></div>

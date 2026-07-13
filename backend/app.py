@@ -185,6 +185,7 @@ def get_scenarios():
             "return_start_year": row[9],
             "return_end_year": row[10],
             "replay_start_year": row[11],
+            "block_length_years": row[12],
             "expenditures": expenditures
         })
     conn.close()
@@ -264,6 +265,28 @@ def create_scenario():
             if replay_year < min_year or replay_year > max_year:
                 conn.close()
                 return jsonify({"error": f"Replay start year must be within {min_year}-{max_year}"}), 400
+                
+        elif return_mode == 'monte_carlo':
+            start_year = int(data['return_start_year'])
+            end_year = int(data['return_end_year']) if data.get('return_end_year') is not None else None
+            block_len = int(data['block_length_years'])
+            if start_year is not None and end_year is not None and start_year > end_year:
+                conn.close()
+                return jsonify({"error": "Return start year must be <= end year"}), 400
+            if block_len <= 0:
+                conn.close()
+                return jsonify({"error": "Block length must be > 0"}), 400
+                
+            cursor.execute("SELECT MIN(year), MAX(year) FROM annual_returns")
+            min_year, max_year = cursor.fetchone()
+            
+            if min_year is None:
+                conn.close()
+                return jsonify({"error": "No annual return data available"}), 400
+                
+            if start_year < min_year or (end_year is not None and end_year > max_year):
+                conn.close()
+                return jsonify({"error": f"Return year range must be within {min_year}-{max_year}"}), 400
     except (ValueError, TypeError, KeyError):
         conn.close()
         return jsonify({"error": "Missing or invalid year field for the selected return mode"}), 400
@@ -272,12 +295,13 @@ def create_scenario():
         """INSERT INTO scenarios 
            (name, current_age, retirement_age, end_age, expected_expenses_in_retirement, 
             withdrawal_split_pretax_pct, inflation_rate_pct, return_mode, 
-            return_start_year, return_end_year, replay_start_year)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            return_start_year, return_end_year, replay_start_year, block_length_years)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
         (
             data['name'], current_age, retirement_age, end_age, expenses,
             withdrawal_split, inflation, return_mode,
-            data.get('return_start_year'), data.get('return_end_year'), data.get('replay_start_year')
+            data.get('return_start_year'), data.get('return_end_year'), data.get('replay_start_year'),
+            data.get('block_length_years')
         )
     )
     conn.commit()
@@ -372,6 +396,28 @@ def update_scenario(scenario_id):
             if replay_year < min_year or replay_year > max_year:
                 conn.close()
                 return jsonify({"error": f"Replay start year must be within {min_year}-{max_year}"}), 400
+                
+        elif return_mode == 'monte_carlo':
+            start_year = int(data['return_start_year'])
+            end_year = int(data['return_end_year']) if data.get('return_end_year') is not None else None
+            block_len = int(data['block_length_years'])
+            if start_year is not None and end_year is not None and start_year > end_year:
+                conn.close()
+                return jsonify({"error": "Return start year must be <= end year"}), 400
+            if block_len <= 0:
+                conn.close()
+                return jsonify({"error": "Block length must be > 0"}), 400
+                
+            cursor.execute("SELECT MIN(year), MAX(year) FROM annual_returns")
+            min_year, max_year = cursor.fetchone()
+            
+            if min_year is None:
+                conn.close()
+                return jsonify({"error": "No annual return data available"}), 400
+                
+            if start_year < min_year or (end_year is not None and end_year > max_year):
+                conn.close()
+                return jsonify({"error": f"Return year range must be within {min_year}-{max_year}"}), 400
     except (ValueError, TypeError, KeyError):
         conn.close()
         return jsonify({"error": "Missing or invalid year field for the selected return mode"}), 400
@@ -381,12 +427,13 @@ def update_scenario(scenario_id):
            name = ?, current_age = ?, retirement_age = ?, end_age = ?, 
            expected_expenses_in_retirement = ?, withdrawal_split_pretax_pct = ?, 
            inflation_rate_pct = ?, return_mode = ?, return_start_year = ?, 
-           return_end_year = ?, replay_start_year = ?
+           return_end_year = ?, replay_start_year = ?, block_length_years = ?
            WHERE id = ?""",
         (
             data['name'], current_age, retirement_age, end_age, expenses,
             withdrawal_split, inflation, return_mode,
             data.get('return_start_year'), data.get('return_end_year'), data.get('replay_start_year'),
+            data.get('block_length_years'),
             scenario_id
         )
     )
@@ -595,6 +642,16 @@ def preview_projection():
             if replay_year < min_year or replay_year > max_year:
                 conn.close()
                 return jsonify({"error": f"Replay start year must be within {min_year}-{max_year}"}), 400
+        elif return_mode == 'monte_carlo':
+            start_year = int(data['return_start_year'])
+            end_year = int(data['return_end_year']) if data.get('return_end_year') else max_year
+            block_len = int(data['block_length_years'])
+            if start_year < min_year or end_year > max_year:
+                conn.close()
+                return jsonify({"error": f"Return year range must be within {min_year}-{max_year}"}), 400
+            if block_len <= 0:
+                conn.close()
+                return jsonify({"error": "Block length must be > 0"}), 400
     except (ValueError, TypeError, KeyError):
         conn.close()
         return jsonify({"error": "Missing or invalid year field for the selected return mode"}), 400

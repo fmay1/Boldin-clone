@@ -619,6 +619,54 @@ function Scenarios() {
           </button>
         </div>
 
+        <div className="expenditures-section">
+          <h3>Future Income</h3>
+          {incomes.map((inc, index) => (
+            <div key={index} className="expenditure-row">
+              <input
+                type="number"
+                step="0.01"
+                value={inc.startAge}
+                onChange={(e) => updateIncome(index, 'startAge', e.target.value)}
+                placeholder="Start Age"
+                className="exp-input"
+              />
+              <input
+                type="number"
+                step="0.01"
+                value={inc.endAge}
+                onChange={(e) => updateIncome(index, 'endAge', e.target.value)}
+                placeholder="End Age"
+                className="exp-input"
+              />
+              <input
+                type="number"
+                step="0.01"
+                value={inc.amount}
+                onChange={(e) => updateIncome(index, 'amount', parseFloat(e.target.value) || 0)}
+                placeholder="Annual Amount"
+                className="exp-input"
+              />
+              <label className="exp-checkbox">
+                <input
+                  type="checkbox"
+                  checked={inc.inflationAdjusted}
+                  onChange={(e) => updateIncome(index, 'inflationAdjusted', e.target.checked)}
+                />
+                Inflation Adjusted
+              </label>
+              <button type="button" onClick={() => removeIncome(index)} className="delete-exp-btn" title="Delete">×</button>
+            </div>
+          ))}
+          <button
+            type="button"
+            onClick={addIncome}
+            className="add-exp-btn"
+          >
+            + Add Income
+          </button>
+        </div>
+
         <button type="submit">{editingId ? 'Update Scenario' : 'Add Scenario'}</button>
         {editingId && (
           <>

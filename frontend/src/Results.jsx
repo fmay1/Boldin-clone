@@ -97,6 +97,18 @@ function Results() {
 
       {!loading && results.length > 0 && (
         <>
+          {currentReturnMode === 'monte_carlo' && (
+            <div style={{ marginBottom: '20px', padding: '15px', backgroundColor: '#f8f9fa', borderRadius: '4px', border: '1px solid #ddd' }}>
+              <h3 style={{ margin: '0 0 5px 0' }}>Monte Carlo Success Rate</h3>
+              <div style={{ fontSize: '24px', fontWeight: 'bold', color: '#28a745' }}>
+                {(100 - results[results.length - 1].depletion_probability_pct).toFixed(1)}% chance of funds lasting through age {results[results.length - 1].age}
+              </div>
+              <div style={{ fontSize: '12px', color: '#666' }}>
+                Based on {results[results.length - 1].depletion_probability_pct.toFixed(1)}% of 1,000 simulated paths depleting by end age.
+              </div>
+            </div>
+          )}
+
           <div style={{ width: '100%', height: 400, marginBottom: '20px' }}>
             <ResponsiveContainer>
               <LineChart data={results}>
@@ -121,6 +133,22 @@ function Results() {
               </LineChart>
             </ResponsiveContainer>
           </div>
+
+          {currentReturnMode === 'monte_carlo' && (
+            <div style={{ width: '100%', height: 250, marginBottom: '20px' }}>
+              <h4>Probability of Depletion by Age</h4>
+              <ResponsiveContainer>
+                <LineChart data={results}>
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis dataKey="age" label={{ value: 'Age', position: 'insideBottomRight', offset: -5 }} />
+                  <YAxis domain={[0, 100]} tickFormatter={(val) => `${val}%`} />
+                  <Tooltip formatter={(val) => `${val.toFixed(1)}%`} />
+                  <Legend />
+                  <Line type="monotone" dataKey="depletion_probability_pct" stroke="#e74c3c" strokeWidth={2} dot={false} name="Depletion Probability" />
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
+          )}
 
           <div>
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '14px' }}>

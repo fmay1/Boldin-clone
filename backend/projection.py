@@ -384,9 +384,10 @@ def calculate_projection(scenario_data, accounts, annual_returns, expenditures=N
             
         total_months = round((end_age - current_age) * 12)
         horizon_years = math.ceil(total_months / 12)
-        num_paths = 500
+        num_paths = 1000
         
         results_by_age = {A: [] for A in target_ages}
+        depletion_counts = {A: 0 for A in target_ages}
         min_early_access_age = None
         early_access_count = 0
         
@@ -407,7 +408,10 @@ def calculate_projection(scenario_data, accounts, annual_returns, expenditures=N
             for target_age in target_ages:
                 if target_age in sim_results:
                     results_by_age[target_age].append(sim_results[target_age])
-                    
+                    # Track depletion: if combined balance is 0, it's depleted
+                    if sim_results[target_age]["combined"] == 0.0:
+                        depletion_counts[target_age] += 1
+                        
             if early_age is not None:
                 early_access_count += 1
                 if min_early_access_age is None or early_age < min_early_access_age:
@@ -434,6 +438,8 @@ def calculate_projection(scenario_data, accounts, annual_returns, expenditures=N
             ci95_low = _percentile(combined_vals, 2.5)
             ci95_high = _percentile(combined_vals, 97.5)
             
+            depletion_pct = (depletion_counts[target_age] / num_paths) * 100
+            
             final_results.append({
                 "age": target_age,
                 "mean_balance": median_combined,
@@ -445,7 +451,8 @@ def calculate_projection(scenario_data, accounts, annual_returns, expenditures=N
                 "ci70_low": ci70_low,
                 "ci70_high": ci70_high,
                 "ci95_low": ci95_low,
-                "ci95_high": ci95_high
+                "ci95_high": ci95_high,
+                "depletion_probability_pct": depletion_pct
             })
             
         early_access_warning = None

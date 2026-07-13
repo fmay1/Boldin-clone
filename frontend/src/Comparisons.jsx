@@ -75,6 +75,28 @@ function Comparisons() {
     chartData.push(row)
   })
 
+  // Build depletion chart data for Monte Carlo scenarios
+  const depletionChartData = []
+  const hasDepletionData = projections.some(p => p.results.length > 0 && p.results[0].depletion_probability_pct !== undefined)
+  
+  if (hasDepletionData) {
+    const allDepletionAges = new Set()
+    projections.forEach(p => {
+      if (p.results[0]?.depletion_probability_pct === undefined) return
+      p.results.forEach(r => allDepletionAges.add(r.age))
+    })
+    const sortedDepletionAges = Array.from(allDepletionAges).sort((a, b) => a - b)
+    sortedDepletionAges.forEach(age => {
+      const row = { age }
+      projections.forEach(p => {
+        if (p.results[0]?.depletion_probability_pct === undefined) return
+        const res = p.results.find(r => r.age === age)
+        row[p.scenario_name] = res ? res.depletion_probability_pct : null
+      })
+      depletionChartData.push(row)
+    })
+  }
+
   return (
     <div style={{ padding: '20px' }}>
       <h2>Scenario Comparisons</h2>
@@ -124,6 +146,35 @@ function Comparisons() {
               </LineChart>
             </ResponsiveContainer>
           </div>
+
+          {hasDepletionData && (
+            <div style={{ width: '100%', height: 250, marginBottom: '20px' }}>
+              <h4>Probability of Depletion by Age (Monte Carlo Scenarios)</h4>
+              <ResponsiveContainer>
+                <LineChart data={depletionChartData}>
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis dataKey="age" label={{ value: 'Age', position: 'insideBottomRight', offset: -5 }} />
+                  <YAxis domain={[0, 100]} tickFormatter={(val) => `${val}%`} />
+                  <Tooltip formatter={(val) => val !== null ? `${val.toFixed(1)}%` : 'N/A'} />
+                  <Legend />
+                  {projections.map((p, idx) => {
+                    if (p.results[0]?.depletion_probability_pct === undefined) return null;
+                    return (
+                      <Line
+                        key={`depletion-${p.scenario_id}`}
+                        type="monotone"
+                        dataKey={p.scenario_name}
+                        stroke={COLORS[idx % COLORS.length]}
+                        strokeWidth={2}
+                        dot={false}
+                        connectNulls={false}
+                      />
+                    );
+                  })}
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
+          )}
 
           <div style={{ marginTop: '20px' }}>
             <h3>Scenario Warnings</h3>

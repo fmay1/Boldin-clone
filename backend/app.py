@@ -172,6 +172,10 @@ def get_scenarios():
         exp_rows = cursor.fetchall()
         expenditures = [{"id": e[0], "amount": e[1], "age": e[2], "inflation_adjusted": e[3]} for e in exp_rows]
         
+        cursor.execute("SELECT id, start_age, end_age, amount, inflation_adjusted FROM scenario_incomes WHERE scenario_id = ?", (scenario_id,))
+        inc_rows = cursor.fetchall()
+        incomes = [{"id": i[0], "start_age": i[1], "end_age": i[2], "amount": i[3], "inflation_adjusted": i[4]} for i in inc_rows]
+        
         scenarios.append({
             "id": scenario_id,
             "name": row[1],
@@ -186,7 +190,8 @@ def get_scenarios():
             "return_end_year": row[10],
             "replay_start_year": row[11],
             "block_length_years": row[12],
-            "expenditures": expenditures
+            "expenditures": expenditures,
+            "incomes": incomes
         })
     conn.close()
     return jsonify(scenarios)

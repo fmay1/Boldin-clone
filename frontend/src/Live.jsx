@@ -37,7 +37,8 @@ function Live() {
         return_mode: scenario.return_mode,
         return_start_year: scenario.return_start_year,
         return_end_year: scenario.return_end_year,
-        replay_start_year: scenario.replay_start_year
+        replay_start_year: scenario.replay_start_year,
+        block_length_years: scenario.block_length_years
       })
       const exps = (scenario.expenditures || []).map(e => ({
         id: e.id,
@@ -256,6 +257,7 @@ function Live() {
             <select name="return_mode" value={formData.return_mode || ''} onChange={handleInputChange}>
               <option value="mean_stdev">Mean/Stdev</option>
               <option value="historical_replay">Historical Replay</option>
+              <option value="monte_carlo">Monte Carlo</option>
             </select>
           </div>
           
@@ -277,6 +279,23 @@ function Live() {
               <label>Replay Start Year:</label>
               <input type="number" name="replay_start_year" value={formData.replay_start_year || ''} onChange={handleInputChange} />
             </div>
+          )}
+
+          {currentReturnMode === 'monte_carlo' && (
+            <>
+              <div className="form-group">
+                <label>Return Start Year:</label>
+                <input type="number" name="return_start_year" value={formData.return_start_year || ''} onChange={handleInputChange} />
+              </div>
+              <div className="form-group">
+                <label>Return End Year:</label>
+                <input type="number" name="return_end_year" value={formData.return_end_year || ''} onChange={handleInputChange} />
+              </div>
+              <div className="form-group">
+                <label>Block Length (Years):</label>
+                <input type="number" name="block_length_years" value={formData.block_length_years || ''} onChange={handleInputChange} />
+              </div>
+            </>
           )}
 
           <div className="expenditures-section">
@@ -347,7 +366,7 @@ function Live() {
                 <YAxis tickFormatter={(val) => `$${(val / 1000000).toFixed(1)}M`} />
                 <Tooltip formatter={(val) => formatCurrency(val)} />
                 <Legend />
-                {currentReturnMode === 'mean_stdev' && (
+                {(currentReturnMode === 'mean_stdev' || currentReturnMode === 'monte_carlo') && (
                   <>
                     <Line type="monotone" dataKey="ci95_low" stroke="#5b5ea6" strokeDasharray="4 4" name="95% CI Low" dot={false} />
                     <Line type="monotone" dataKey="ci70_low" stroke="#8884d8" strokeDasharray="4 4" name="70% CI Low" dot={false} />
@@ -367,7 +386,7 @@ function Live() {
               <thead>
                 <tr style={{ borderBottom: '2px solid #ddd' }}>
                   <th style={{ padding: '8px', textAlign: 'left' }}>Age</th>
-                  {currentReturnMode === 'mean_stdev' && (
+                  {(currentReturnMode === 'mean_stdev' || currentReturnMode === 'monte_carlo') && (
                     <>
                       <th style={{ padding: '8px', textAlign: 'right' }}>95% CI Low</th>
                       <th style={{ padding: '8px', textAlign: 'right' }}>70% CI Low</th>
@@ -375,7 +394,7 @@ function Live() {
                     </>
                   )}
                   <th style={{ padding: '8px', textAlign: 'right' }}>Mean Balance</th>
-                  {currentReturnMode === 'mean_stdev' && (
+                  {(currentReturnMode === 'mean_stdev' || currentReturnMode === 'monte_carlo') && (
                     <>
                       <th style={{ padding: '8px', textAlign: 'right' }}>50% CI High</th>
                       <th style={{ padding: '8px', textAlign: 'right' }}>70% CI High</th>
@@ -390,7 +409,7 @@ function Live() {
                 {results.map((row, idx) => (
                   <tr key={idx} style={{ borderBottom: '1px solid #eee' }}>
                     <td style={{ padding: '8px' }}>{row.age}</td>
-                    {currentReturnMode === 'mean_stdev' && (
+                    {(currentReturnMode === 'mean_stdev' || currentReturnMode === 'monte_carlo') && (
                       <>
                         <td style={{ padding: '8px', textAlign: 'right' }}>{formatCurrency(row.ci95_low)}</td>
                         <td style={{ padding: '8px', textAlign: 'right' }}>{formatCurrency(row.ci70_low)}</td>
@@ -398,7 +417,7 @@ function Live() {
                       </>
                     )}
                     <td style={{ padding: '8px', textAlign: 'right' }}>{formatCurrency(row.mean_balance)}</td>
-                    {currentReturnMode === 'mean_stdev' && (
+                    {(currentReturnMode === 'mean_stdev' || currentReturnMode === 'monte_carlo') && (
                       <>
                         <td style={{ padding: '8px', textAlign: 'right' }}>{formatCurrency(row.ci50_high)}</td>
                         <td style={{ padding: '8px', textAlign: 'right' }}>{formatCurrency(row.ci70_high)}</td>

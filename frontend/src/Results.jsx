@@ -107,7 +107,7 @@ function Results() {
                 <Legend />
                 
                 {/* Confidence Intervals & Mean */}
-                {currentReturnMode === 'mean_stdev' && (
+                {(currentReturnMode === 'mean_stdev' || currentReturnMode === 'monte_carlo') && (
                   <>
                     <Line type="monotone" dataKey="ci95_low" stroke="#5b5ea6" strokeDasharray="4 4" name="95% CI Low" dot={false} />
                     <Line type="monotone" dataKey="ci70_low" stroke="#8884d8" strokeDasharray="4 4" name="70% CI Low" dot={false} />
@@ -127,7 +127,7 @@ function Results() {
               <thead>
                 <tr style={{ borderBottom: '2px solid #ddd' }}>
                   <th style={{ padding: '8px', textAlign: 'left' }}>Age</th>
-                  {currentReturnMode === 'mean_stdev' && (
+                  {(currentReturnMode === 'mean_stdev' || currentReturnMode === 'monte_carlo') && (
                     <>
                       <th style={{ padding: '8px', textAlign: 'right' }}>95% CI Low</th>
                       <th style={{ padding: '8px', textAlign: 'right' }}>70% CI Low</th>
@@ -135,7 +135,7 @@ function Results() {
                     </>
                   )}
                   <th style={{ padding: '8px', textAlign: 'right' }}>Mean Balance</th>
-                  {currentReturnMode === 'mean_stdev' && (
+                  {(currentReturnMode === 'mean_stdev' || currentReturnMode === 'monte_carlo') && (
                     <>
                       <th style={{ padding: '8px', textAlign: 'right' }}>50% CI High</th>
                       <th style={{ padding: '8px', textAlign: 'right' }}>70% CI High</th>
@@ -150,7 +150,7 @@ function Results() {
                 {results.map((row, idx) => (
                   <tr key={idx} style={{ borderBottom: '1px solid #eee' }}>
                     <td style={{ padding: '8px' }}>{row.age}</td>
-                    {currentReturnMode === 'mean_stdev' && (
+                    {(currentReturnMode === 'mean_stdev' || currentReturnMode === 'monte_carlo') && (
                       <>
                         <td style={{ padding: '8px', textAlign: 'right' }}>{formatCurrency(row.ci95_low)}</td>
                         <td style={{ padding: '8px', textAlign: 'right' }}>{formatCurrency(row.ci70_low)}</td>
@@ -158,7 +158,7 @@ function Results() {
                       </>
                     )}
                     <td style={{ padding: '8px', textAlign: 'right' }}>{formatCurrency(row.mean_balance)}</td>
-                    {currentReturnMode === 'mean_stdev' && (
+                    {(currentReturnMode === 'mean_stdev' || currentReturnMode === 'monte_carlo') && (
                       <>
                         <td style={{ padding: '8px', textAlign: 'right' }}>{formatCurrency(row.ci50_high)}</td>
                         <td style={{ padding: '8px', textAlign: 'right' }}>{formatCurrency(row.ci70_high)}</td>

@@ -19,6 +19,7 @@ function Scenarios() {
   const [returnStartYear, setReturnStartYear] = useState('')
   const [returnEndYear, setReturnEndYear] = useState('')
   const [replayStartYear, setReplayStartYear] = useState('')
+  const [blockLengthYears, setBlockLengthYears] = useState('')
   
   // Edit state
   const [editingId, setEditingId] = useState(null)
@@ -33,6 +34,7 @@ function Scenarios() {
   const [editReturnStartYear, setEditReturnStartYear] = useState('')
   const [editReturnEndYear, setEditReturnEndYear] = useState('')
   const [editReplayStartYear, setEditReplayStartYear] = useState('')
+  const [editBlockLengthYears, setEditBlockLengthYears] = useState('')
   
   // Expenditures state
   const [expenditures, setExpenditures] = useState([])
@@ -73,6 +75,7 @@ function Scenarios() {
     setReturnStartYear('')
     setReturnEndYear('')
     setReplayStartYear('')
+    setBlockLengthYears('')
     setEditingId(null)
     setEditName('')
     setEditCurrentAge('')
@@ -85,6 +88,7 @@ function Scenarios() {
     setEditReturnStartYear('')
     setEditReturnEndYear('')
     setEditReplayStartYear('')
+    setEditBlockLengthYears('')
     setExpenditures([])
     setOriginalExpenditureIds([])
     setSuccess('')
@@ -117,6 +121,7 @@ function Scenarios() {
       return_start_year: returnMode === 'mean_stdev' ? parseFloat(returnStartYear) : null,
       return_end_year: returnMode === 'mean_stdev' && returnEndYear ? parseFloat(returnEndYear) : null,
       replay_start_year: returnMode === 'historical_replay' ? parseFloat(replayStartYear) : null,
+      block_length_years: returnMode === 'monte_carlo' ? parseFloat(blockLengthYears) : null,
       expenditures: expenditures
     }
 
@@ -163,6 +168,7 @@ function Scenarios() {
     setEditReturnStartYear(scenario.return_start_year)
     setEditReturnEndYear(scenario.return_end_year)
     setEditReplayStartYear(scenario.replay_start_year)
+    setEditBlockLengthYears(scenario.block_length_years || '')
     
     const exps = (scenario.expenditures || []).map(e => ({
       id: e.id,
@@ -202,7 +208,8 @@ function Scenarios() {
       return_mode: editReturnMode,
       return_start_year: editReturnMode === 'mean_stdev' ? parseFloat(editReturnStartYear) : null,
       return_end_year: editReturnMode === 'mean_stdev' && editReturnEndYear ? parseFloat(editReturnEndYear) : null,
-      replay_start_year: editReturnMode === 'historical_replay' ? parseFloat(editReplayStartYear) : null
+      replay_start_year: editReturnMode === 'historical_replay' ? parseFloat(editReplayStartYear) : null,
+      block_length_years: editReturnMode === 'monte_carlo' ? parseFloat(editBlockLengthYears) : null
     }
 
     try {
@@ -279,7 +286,8 @@ function Scenarios() {
       return_mode: editReturnMode,
       return_start_year: editReturnMode === 'mean_stdev' ? parseFloat(editReturnStartYear) : null,
       return_end_year: editReturnMode === 'mean_stdev' && editReturnEndYear ? parseFloat(editReturnEndYear) : null,
-      replay_start_year: editReturnMode === 'historical_replay' ? parseFloat(editReplayStartYear) : null
+      replay_start_year: editReturnMode === 'historical_replay' ? parseFloat(editReplayStartYear) : null,
+      block_length_years: editReturnMode === 'monte_carlo' ? parseFloat(editBlockLengthYears) : null
     }
 
     try {
@@ -427,6 +435,7 @@ function Scenarios() {
           >
             <option value="mean_stdev">Mean / StDev</option>
             <option value="historical_replay">Historical Replay</option>
+            <option value="monte_carlo">Monte Carlo</option>
           </select>
         </div>
         
@@ -459,6 +468,19 @@ function Scenarios() {
               type="number" 
               value={editingId ? editReplayStartYear : replayStartYear} 
               onChange={(e) => editingId ? setEditReplayStartYear(e.target.value) : setReplayStartYear(e.target.value)} 
+              required 
+            />
+          </div>
+        )}
+
+        {(!editingId ? returnMode : editReturnMode) === 'monte_carlo' && (
+          <div className="form-group">
+            <label>Block Length (Years):</label>
+            <input 
+              type="number" 
+              min="1"
+              value={editingId ? editBlockLengthYears : blockLengthYears} 
+              onChange={(e) => editingId ? setEditBlockLengthYears(e.target.value) : setBlockLengthYears(e.target.value)} 
               required 
             />
           </div>

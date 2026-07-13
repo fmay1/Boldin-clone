@@ -118,8 +118,8 @@ function Scenarios() {
       withdrawal_split_pretax_pct: parseFloat(withdrawalSplit),
       inflation_rate_pct: parseFloat(inflationRate),
       return_mode: returnMode,
-      return_start_year: returnMode === 'mean_stdev' ? parseFloat(returnStartYear) : null,
-      return_end_year: returnMode === 'mean_stdev' && returnEndYear ? parseFloat(returnEndYear) : null,
+      return_start_year: (returnMode === 'mean_stdev' || returnMode === 'monte_carlo') ? parseFloat(returnStartYear) : null,
+      return_end_year: (returnMode === 'mean_stdev' || returnMode === 'monte_carlo') && returnEndYear ? parseFloat(returnEndYear) : null,
       replay_start_year: returnMode === 'historical_replay' ? parseFloat(replayStartYear) : null,
       block_length_years: returnMode === 'monte_carlo' ? parseFloat(blockLengthYears) : null,
       expenditures: expenditures
@@ -206,8 +206,8 @@ function Scenarios() {
       withdrawal_split_pretax_pct: parseFloat(editWithdrawalSplit),
       inflation_rate_pct: parseFloat(editInflationRate),
       return_mode: editReturnMode,
-      return_start_year: editReturnMode === 'mean_stdev' ? parseFloat(editReturnStartYear) : null,
-      return_end_year: editReturnMode === 'mean_stdev' && editReturnEndYear ? parseFloat(editReturnEndYear) : null,
+      return_start_year: (editReturnMode === 'mean_stdev' || editReturnMode === 'monte_carlo') ? parseFloat(editReturnStartYear) : null,
+      return_end_year: (editReturnMode === 'mean_stdev' || editReturnMode === 'monte_carlo') && editReturnEndYear ? parseFloat(editReturnEndYear) : null,
       replay_start_year: editReturnMode === 'historical_replay' ? parseFloat(editReplayStartYear) : null,
       block_length_years: editReturnMode === 'monte_carlo' ? parseFloat(editBlockLengthYears) : null
     }
@@ -284,8 +284,8 @@ function Scenarios() {
       withdrawal_split_pretax_pct: parseFloat(editWithdrawalSplit),
       inflation_rate_pct: parseFloat(editInflationRate),
       return_mode: editReturnMode,
-      return_start_year: editReturnMode === 'mean_stdev' ? parseFloat(editReturnStartYear) : null,
-      return_end_year: editReturnMode === 'mean_stdev' && editReturnEndYear ? parseFloat(editReturnEndYear) : null,
+      return_start_year: (editReturnMode === 'mean_stdev' || editReturnMode === 'monte_carlo') ? parseFloat(editReturnStartYear) : null,
+      return_end_year: (editReturnMode === 'mean_stdev' || editReturnMode === 'monte_carlo') && editReturnEndYear ? parseFloat(editReturnEndYear) : null,
       replay_start_year: editReturnMode === 'historical_replay' ? parseFloat(editReplayStartYear) : null,
       block_length_years: editReturnMode === 'monte_carlo' ? parseFloat(editBlockLengthYears) : null
     }
@@ -439,7 +439,7 @@ function Scenarios() {
           </select>
         </div>
         
-        {(!editingId ? returnMode : editReturnMode) === 'mean_stdev' && (
+        {(!editingId ? returnMode : editReturnMode) !== 'historical_replay' && (
           <>
             <div className="form-group">
               <label>Return Start Year:</label>

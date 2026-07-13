@@ -153,6 +153,20 @@ function Scenarios() {
         })
       }
       
+      // Create incomes for the new scenario
+      for (const inc of incomes) {
+        await fetch(`/api/scenarios/${data.id}/incomes`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            start_age: parseFloat(inc.startAge),
+            end_age: parseFloat(inc.endAge),
+            amount: parseFloat(inc.amount) || 0,
+            inflation_adjusted: inc.inflationAdjusted ? 1 : 0
+          })
+        })
+      }
+      
       setSuccess('Scenario created successfully')
       resetForm()
       fetchScenarios()
@@ -184,6 +198,16 @@ function Scenarios() {
     }))
     setExpenditures(exps)
     setOriginalExpenditureIds(exps.map(e => e.id))
+    
+    const incs = (scenario.incomes || []).map(i => ({
+      id: i.id,
+      startAge: i.start_age,
+      endAge: i.end_age,
+      amount: i.amount,
+      inflationAdjusted: !!i.inflation_adjusted
+    }))
+    setIncomes(incs)
+    setOriginalIncomeIds(incs.map(i => i.id))
     
     setError('')
     setSuccess('')
@@ -244,6 +268,37 @@ function Scenarios() {
           })
         } else {
           await fetch(`/api/scenarios/${editingId}/expenditures`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body)
+          })
+        }
+      }
+
+      // Sync incomes
+      const currentIncIds = incomes.map(i => i.id).filter(Boolean)
+      const deletedIncIds = originalIncomeIds.filter(id => !currentIncIds.includes(id))
+      
+      for (const id of deletedIncIds) {
+        await fetch(`/api/scenarios/${editingId}/incomes/${id}`, { method: 'DELETE' })
+      }
+      
+      for (const inc of incomes) {
+        const body = {
+          start_age: parseFloat(inc.startAge),
+          end_age: parseFloat(inc.endAge),
+          amount: parseFloat(inc.amount) || 0,
+          inflation_adjusted: inc.inflationAdjusted ? 1 : 0
+        }
+        
+        if (inc.id) {
+          await fetch(`/api/scenarios/${editingId}/incomes/${inc.id}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body)
+          })
+        } else {
+          await fetch(`/api/scenarios/${editingId}/incomes`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(body)
@@ -314,6 +369,20 @@ function Scenarios() {
             amount: parseFloat(exp.amount) || 0,
             age: parseFloat(exp.age),
             inflation_adjusted: exp.inflationAdjusted ? 1 : 0
+          })
+        })
+      }
+      
+      // Create incomes for the new scenario using current form state
+      for (const inc of incomes) {
+        await fetch(`/api/scenarios/${data.id}/incomes`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            start_age: parseFloat(inc.startAge),
+            end_age: parseFloat(inc.endAge),
+            amount: parseFloat(inc.amount) || 0,
+            inflation_adjusted: inc.inflationAdjusted ? 1 : 0
           })
         })
       }

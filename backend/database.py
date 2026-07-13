@@ -73,5 +73,16 @@ def init_db():
         )
     ''')
     
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS scenario_incomes (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            scenario_id INTEGER NOT NULL REFERENCES scenarios(id) ON DELETE CASCADE,
+            start_age REAL NOT NULL,
+            end_age REAL NOT NULL,
+            amount REAL NOT NULL CHECK(amount > 0),
+            inflation_adjusted INTEGER NOT NULL DEFAULT 0
+        )
+    ''')
+    
     conn.commit()
     conn.close()

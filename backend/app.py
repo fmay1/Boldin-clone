@@ -579,6 +579,138 @@ def delete_expenditure(scenario_id, eid):
     conn.close()
     return jsonify({"message": "Expenditure deleted"})
 
+# --- Scenario Income Routes ---
+
+@app.route('/api/scenarios/<int:scenario_id>/incomes', methods=['POST'])
+def create_income(scenario_id):
+    data = request.get_json()
+    conn = get_connection()
+    cursor = conn.cursor()
+    
+    # Check scenario exists and get current_age and end_age
+    cursor.execute("SELECT current_age, end_age FROM scenarios WHERE id = ?", (scenario_id,))
+    scenario = cursor.fetchone()
+    if not scenario:
+        conn.close()
+        return jsonify({"error": "Scenario not found"}), 404
+        
+    current_age = scenario[0]
+    scenario_end_age = scenario[1]
+    
+    start_age = data.get('start_age')
+    end_age = data.get('end_age')
+    amount = data.get('amount')
+    inflation_adjusted = data.get('inflation_adjusted', 0)
+    
+    if start_age is None or end_age is None or amount is None:
+        conn.close()
+        return jsonify({"error": "Start age, end age, and amount are required"}), 400
+        
+    try:
+        start_age = float(start_age)
+        end_age = float(end_age)
+        amount = float(amount)
+    except (ValueError, TypeError):
+        conn.close()
+        return jsonify({"error": "Invalid numeric values"}), 400
+        
+    if amount <= 0:
+        conn.close()
+        return jsonify({"error": "Amount must be > 0"}), 400
+        
+    if start_age >= end_age:
+        conn.close()
+        return jsonify({"error": "Start age must be < end age"}), 400
+        
+    if start_age < current_age:
+        conn.close()
+        return jsonify({"error": "Start age must be >= current_age of the scenario"}), 400
+        
+    if end_age > scenario_end_age:
+        conn.close()
+        return jsonify({"error": "End age must be <= end_age of the scenario"}), 400
+        
+    cursor.execute(
+        "INSERT INTO scenario_incomes (scenario_id, start_age, end_age, amount, inflation_adjusted) VALUES (?, ?, ?, ?, ?)",
+        (scenario_id, start_age, end_age, amount, 1 if inflation_adjusted else 0)
+    )
+    conn.commit()
+    inc_id = cursor.lastrowid
+    conn.close()
+    return jsonify({"id": inc_id, "message": "Income created"}), 201
+
+@app.route('/api/scenarios/<int:scenario_id>/incomes/<int:iid>', methods=['PUT'])
+def update_income(scenario_id, iid):
+    data = request.get_json()
+    conn = get_connection()
+    cursor = conn.cursor()
+    
+    # Check if income belongs to scenario
+    cursor.execute("SELECT start_age, end_age, amount FROM scenario_incomes WHERE id = ? AND scenario_id = ?", (iid, scenario_id))
+    inc = cursor.fetchone()
+    if not inc:
+        conn.close()
+        return jsonify({"error": "Income not found or does not belong to this scenario"}), 404
+        
+    # Get scenario current_age and end_age
+    cursor.execute("SELECT current_age, end_age FROM scenarios WHERE id = ?", (scenario_id,))
+    scenario = cursor.fetchone()
+    current_age = scenario[0]
+    scenario_end_age = scenario[1]
+    
+    start_age = data.get('start_age')
+    end_age = data.get('end_age')
+    amount = data.get('amount')
+    inflation_adjusted = data.get('inflation_adjusted', 0)
+    
+    if start_age is None or end_age is None or amount is None:
+        conn.close()
+        return jsonify({"error": "Start age, end age, and amount are required"}), 400
+        
+    try:
+        start_age = float(start_age)
+        end_age = float(end_age)
+        amount = float(amount)
+    except (ValueError, TypeError):
+        conn.close()
+        return jsonify({"error": "Invalid numeric values"}), 400
+        
+    if amount <= 0:
+        conn.close()
+        return jsonify({"error": "Amount must be > 0"}), 400
+        
+    if start_age >= end_age:
+        conn.close()
+        return jsonify({"error": "Start age must be < end age"}), 400
+        
+    if start_age < current_age:
+        conn.close()
+        return jsonify({"error": "Start age must be >= current_age of the scenario"}), 400
+        
+    if end_age > scenario_end_age:
+        conn.close()
+        return jsonify({"error": "End age must be <= end_age of the scenario"}), 400
+        
+    cursor.execute(
+        "UPDATE scenario_incomes SET start_age = ?, end_age = ?, amount = ?, inflation_adjusted = ? WHERE id = ? AND scenario_id = ?",
+        (start_age, end_age, amount, 1 if inflation_adjusted else 0, iid, scenario_id)
+    )
+    conn.commit()
+    conn.close()
+    return jsonify({"message": "Income updated"})
+
+@app.route('/api/scenarios/<int:scenario_id>/incomes/<int:iid>', methods=['DELETE'])
+def delete_income(scenario_id, iid):
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute("DELETE FROM scenario_incomes WHERE id = ? AND scenario_id = ?", (iid, scenario_id))
+    if cursor.rowcount == 0:
+        conn.close()
+        return jsonify({"error": "Income not found or does not belong to this scenario"}), 404
+    conn.commit()
+    conn.close()
+    return jsonify({"message": "Income deleted"})
+
 # --- Projection Route ---
 
 @app.route('/api/projection/<int:scenario_id>', methods=['GET'])

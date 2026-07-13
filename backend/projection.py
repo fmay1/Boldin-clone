@@ -1,5 +1,21 @@
 import math
+import random
 from database import get_connection
+
+def _percentile(sorted_data, p):
+    """Compute the p-th percentile of sorted_data using linear interpolation."""
+    n = len(sorted_data)
+    if n == 0:
+        return 0.0
+    if n == 1:
+        return sorted_data[0]
+    idx = (p / 100.0) * (n - 1)
+    lower = int(math.floor(idx))
+    upper = int(math.ceil(idx))
+    if lower == upper:
+        return sorted_data[lower]
+    frac = idx - lower
+    return sorted_data[lower] * (1 - frac) + sorted_data[upper] * frac
 
 def _run_monthly_simulation(start_year, current_age, retirement_age, end_age, expenses, withdrawal_split_pretax_pct, inflation_rate, initial_post_tax, initial_pretax, contrib_post_tax, contrib_pretax, returns_by_year, last_data_year, target_months, expenditures=None, year_sequence=None):
     """
@@ -334,6 +350,112 @@ def calculate_projection(scenario_data, accounts, annual_returns, expenditures=N
         return {
             "results": final_results,
             "warning": warning,
+            "early_access_warning": early_access_warning
+        }
+        
+    elif return_mode == 'monte_carlo':
+        start_year = int(scenario_data['return_start_year'])
+        end_year = scenario_data.get('return_end_year')
+        if end_year is not None:
+            end_year = int(end_year)
+        else:
+            end_year = last_data_year
+        block_length = int(scenario_data['block_length_years'])
+        
+        if block_length <= 0:
+            return {"error": "Block length must be > 0."}
+        if start_year > end_year:
+            return {"error": "Return start year must be <= end year."}
+            
+        # Determine eligible block starting years
+        sorted_years = sorted(returns_by_year.keys())
+        eligible_starts = []
+        for y in sorted_years:
+            if y < start_year:
+                continue
+            if y + block_length - 1 > end_year:
+                break
+            block_years = range(y, y + block_length)
+            if all(by in returns_by_year for by in block_years):
+                eligible_starts.append(y)
+                
+        if not eligible_starts:
+            return {"error": f"No valid blocks of length {block_length} exist within the selected year range ({start_year}-{end_year})."}
+            
+        total_months = round((end_age - current_age) * 12)
+        horizon_years = math.ceil(total_months / 12)
+        num_paths = 500
+        
+        results_by_age = {A: [] for A in target_ages}
+        min_early_access_age = None
+        early_access_count = 0
+        
+        for _ in range(num_paths):
+            # Build one random path via block bootstrap
+            path_years = []
+            while len(path_years) < horizon_years:
+                s = random.choice(eligible_starts)
+                path_years.extend(range(s, s + block_length))
+            path_years = path_years[:horizon_years]
+            
+            sim_results, early_age = _run_monthly_simulation(
+                start_year, current_age, retirement_age, end_age, expenses, withdrawal_split_pretax_pct,
+                inflation_rate, initial_post_tax, initial_pretax, contrib_post_tax, contrib_pretax,
+                returns_by_year, last_data_year, target_months, expenditures, year_sequence=path_years
+            )
+            
+            for target_age in target_ages:
+                if target_age in sim_results:
+                    results_by_age[target_age].append(sim_results[target_age])
+                    
+            if early_age is not None:
+                early_access_count += 1
+                if min_early_access_age is None or early_age < min_early_access_age:
+                    min_early_access_age = early_age
+                    
+        final_results = []
+        for target_age in target_ages:
+            vals = results_by_age[target_age]
+            if not vals:
+                break
+                
+            combined_vals = sorted([v["combined"] for v in vals])
+            post_tax_vals = sorted([v["post_tax"] for v in vals])
+            pretax_vals = sorted([v["pretax"] for v in vals])
+            
+            median_combined = _percentile(combined_vals, 50)
+            median_post_tax = _percentile(post_tax_vals, 50)
+            median_pretax = _percentile(pretax_vals, 50)
+            
+            ci50_low = _percentile(combined_vals, 25)
+            ci50_high = _percentile(combined_vals, 75)
+            ci70_low = _percentile(combined_vals, 15)
+            ci70_high = _percentile(combined_vals, 85)
+            ci95_low = _percentile(combined_vals, 2.5)
+            ci95_high = _percentile(combined_vals, 97.5)
+            
+            final_results.append({
+                "age": target_age,
+                "mean_balance": median_combined,
+                "mean_post_tax": median_post_tax,
+                "mean_pretax": median_pretax,
+                "stdev_balance": 0,
+                "ci50_low": ci50_low,
+                "ci50_high": ci50_high,
+                "ci70_low": ci70_low,
+                "ci70_high": ci70_high,
+                "ci95_low": ci95_low,
+                "ci95_high": ci95_high
+            })
+            
+        early_access_warning = None
+        if min_early_access_age is not None:
+            pct = (early_access_count / num_paths) * 100
+            early_access_warning = f"In {early_access_count} out of {num_paths} simulated paths ({pct:.1f}%), pre-tax funds were accessed before age 59.5 because post-tax funds ran out, starting as early as age {min_early_access_age}."
+            
+        return {
+            "results": final_results,
+            "warning": None,
             "early_access_warning": early_access_warning
         }
         

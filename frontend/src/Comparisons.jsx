@@ -148,10 +148,10 @@ function Comparisons() {
           </div>
 
           {hasDepletionData && (
-            <div style={{ width: '100%', height: 250, marginBottom: '20px' }}>
+            <div style={{ width: '100%', height: 250, marginBottom: '40px' }}>
               <h4>Probability of Depletion by Age (Monte Carlo Scenarios)</h4>
               <ResponsiveContainer>
-                <LineChart data={depletionChartData}>
+                <LineChart data={depletionChartData} margin={{ bottom: 20 }}>
                   <CartesianGrid strokeDasharray="3 3" />
                   <XAxis dataKey="age" label={{ value: 'Age', position: 'insideBottomRight', offset: -5 }} />
                   <YAxis domain={[0, 100]} tickFormatter={(val) => `${val}%`} />

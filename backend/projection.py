@@ -1,9 +1,11 @@
 import math
 from database import get_connection
 
-def _run_monthly_simulation(start_year, current_age, retirement_age, end_age, expenses, withdrawal_split_pretax_pct, inflation_rate, initial_post_tax, initial_pretax, contrib_post_tax, contrib_pretax, returns_by_year, last_data_year, target_months, expenditures=None):
+def _run_monthly_simulation(start_year, current_age, retirement_age, end_age, expenses, withdrawal_split_pretax_pct, inflation_rate, initial_post_tax, initial_pretax, contrib_post_tax, contrib_pretax, returns_by_year, last_data_year, target_months, expenditures=None, year_sequence=None):
     """
     Runs a single monthly simulation starting from a given historical year.
+    If year_sequence is provided (e.g., for Monte Carlo), it uses that sequence
+    instead of incrementing from start_year.
     Returns a dict of {target_age: {combined, post_tax, pretax}} and the early_pretax_access_age if any.
     """
     if expenditures is None:
@@ -31,9 +33,16 @@ def _run_monthly_simulation(start_year, current_age, retirement_age, end_age, ex
         else:
             period_index = 1 + (m - first_period_months - 1) // 12
             
-        historical_year = start_year + period_index
-        if historical_year > last_data_year:
-            break
+        if year_sequence is not None:
+            # Monte Carlo mode: use pre-built random sequence of years
+            if period_index >= len(year_sequence):
+                break
+            historical_year = year_sequence[period_index]
+        else:
+            # mean_stdev / historical_replay mode: simple increment from start_year
+            historical_year = start_year + period_index
+            if historical_year > last_data_year:
+                break
             
         ret_pct = returns_by_year[historical_year] / 100.0
         monthly_rate = (1 + ret_pct) ** (1/12) - 1

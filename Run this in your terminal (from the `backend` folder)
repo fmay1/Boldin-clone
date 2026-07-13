@@ -1,0 +1,20 @@
+python -c "
+from projection import _run_monthly_simulation
+
+# Mock data
+returns = {2000: 10.0, 2001: -5.0, 2002: 8.0, 2003: 12.0}
+target_months = {12: 47, 24: 48}  # Ages 47 and 48
+
+# 1. Test default behavior (no sequence)
+res1, _ = _run_monthly_simulation(2000, 46.0, 50.0, 60.0, 50000, 50, 0.025, 100000, 100000, 10000, 10000, returns, 2003, target_months)
+print('Default (increments from 2000):', list(res1.keys()))
+
+# 2. Test with explicit year_sequence (Monte Carlo style)
+custom_seq = [2002, 2000, 2001]  # Forces specific years per period
+res2, _ = _run_monthly_simulation(2000, 46.0, 50.0, 60.0, 50000, 50, 0.025, 100000, 100000, 10000, 10000, returns, 2003, target_months, year_sequence=custom_seq)
+print('Custom sequence:', list(res2.keys()))
+
+# Verify they differ (proves the sequence is actually being used)
+assert res1 != res2, 'Sequences should produce different results!'
+print('✅ Step 2 verified: year_sequence correctly overrides default year assignment.')
+"

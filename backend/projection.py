@@ -17,7 +17,7 @@ def _percentile(sorted_data, p):
     frac = idx - lower
     return sorted_data[lower] * (1 - frac) + sorted_data[upper] * frac
 
-def _run_monthly_simulation(start_year, current_age, retirement_age, end_age, expenses, withdrawal_split_pretax_pct, inflation_rate, initial_post_tax, initial_pretax, contrib_post_tax, contrib_pretax, returns_by_year, last_data_year, target_months, expenditures=None, year_sequence=None):
+def _run_monthly_simulation(start_year, current_age, retirement_age, end_age, expenses, withdrawal_split_pretax_pct, inflation_rate, initial_post_tax, initial_pretax, contrib_post_tax, contrib_pretax, returns_by_year, last_data_year, target_months, expenditures=None, incomes=None, year_sequence=None):
     """
     Runs a single monthly simulation starting from a given historical year.
     If year_sequence is provided (e.g., for Monte Carlo), it uses that sequence
@@ -26,6 +26,8 @@ def _run_monthly_simulation(start_year, current_age, retirement_age, end_age, ex
     """
     if expenditures is None:
         expenditures = []
+    if incomes is None:
+        incomes = []
         
     post_tax = initial_post_tax
     pretax = initial_pretax
@@ -124,6 +126,17 @@ def _run_monthly_simulation(start_year, current_age, retirement_age, end_age, ex
                         else:
                             pretax = 0.0
         
+        # Handle recurring incomes
+        if incomes:
+            for inc in incomes:
+                inc_start_month = round((inc['start_age'] - current_age) * 12)
+                inc_end_month = round((inc['end_age'] - current_age) * 12)
+                if inc_start_month <= m < inc_end_month:
+                    monthly_inc = inc['amount'] / 12.0
+                    if inc.get('inflation_adjusted'):
+                        monthly_inc *= ((1 + inflation_rate) ** (m / 12.0))
+                    post_tax += monthly_inc
+
         if is_pre_retirement:
             post_tax += monthly_contrib_post
             pretax += monthly_contrib_pretax
@@ -180,13 +193,15 @@ def _run_monthly_simulation(start_year, current_age, retirement_age, end_age, ex
             
     return results_by_age, early_pretax_access_age
 
-def calculate_projection(scenario_data, accounts, annual_returns, expenditures=None):
+def calculate_projection(scenario_data, accounts, annual_returns, expenditures=None, incomes=None):
     """
     Core projection calculation. Accepts scenario parameters, accounts, and returns as dicts/lists.
     Returns a result dict (with 'results', 'warning', 'early_access_warning') or an error dict.
     """
     if expenditures is None:
         expenditures = []
+    if incomes is None:
+        incomes = []
         
     current_age = float(scenario_data['current_age'])
     retirement_age = float(scenario_data['retirement_age'])
@@ -242,7 +257,7 @@ def calculate_projection(scenario_data, accounts, annual_returns, expenditures=N
             sim_results, early_age = _run_monthly_simulation(
                 S, current_age, retirement_age, end_age, expenses, withdrawal_split_pretax_pct,
                 inflation_rate, initial_post_tax, initial_pretax, contrib_post_tax, contrib_pretax,
-                returns_by_year, last_data_year, target_months, expenditures
+                returns_by_year, last_data_year, target_months, expenditures, incomes
             )
             
             for target_age in target_ages:
@@ -318,7 +333,7 @@ def calculate_projection(scenario_data, accounts, annual_returns, expenditures=N
         sim_results, early_age = _run_monthly_simulation(
             start_year, current_age, retirement_age, end_age, expenses, withdrawal_split_pretax_pct,
             inflation_rate, initial_post_tax, initial_pretax, contrib_post_tax, contrib_pretax,
-            returns_by_year, last_data_year, target_months, expenditures
+            returns_by_year, last_data_year, target_months, expenditures, incomes
         )
         
         final_results = []
@@ -402,7 +417,7 @@ def calculate_projection(scenario_data, accounts, annual_returns, expenditures=N
             sim_results, early_age = _run_monthly_simulation(
                 start_year, current_age, retirement_age, end_age, expenses, withdrawal_split_pretax_pct,
                 inflation_rate, initial_post_tax, initial_pretax, contrib_post_tax, contrib_pretax,
-                returns_by_year, last_data_year, target_months, expenditures, year_sequence=path_years
+                returns_by_year, last_data_year, target_months, expenditures, incomes, year_sequence=path_years
             )
             
             for target_age in target_ages:
@@ -494,9 +509,12 @@ def run_projection(scenario_id):
     cursor.execute("SELECT amount, age, inflation_adjusted FROM scenario_expenditures WHERE scenario_id = ?", (scenario_id,))
     expenditures = [dict(e) for e in cursor.fetchall()]
         
+    cursor.execute("SELECT start_age, end_age, amount, inflation_adjusted FROM scenario_incomes WHERE scenario_id = ?", (scenario_id,))
+    incomes = [dict(i) for i in cursor.fetchall()]
+        
     conn.close()
     
-    result = calculate_projection(dict(scenario), [dict(a) for a in accounts], [dict(r) for r in annual_returns], expenditures)
+    result = calculate_projection(dict(scenario), [dict(a) for a in accounts], [dict(r) for r in annual_returns], expenditures, incomes)
     if "error" in result:
         return result, 400
     return result

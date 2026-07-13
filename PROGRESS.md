@@ -1,6 +1,6 @@
 # PROGRESS.md
 
-**Current state (read this first):** Project initialized. Ready to begin Build Order Step 1 (Project scaffolding). No features implemented yet.
+**Current state (read this first):** Monte Carlo simulation mode is fully implemented, including 1,000-path block bootstrap, percentile-based confidence intervals, and depletion probability tracking/display across Results, Comparisons, and Live views. All Build Order steps 1-13 and Monte Carlo sub-plan steps 1-9 are complete.
 
 ## How to use this file
 
@@ -17,14 +17,9 @@
 
 ## Log
 
-### [Build Order step # / short title]
+### [Monte Carlo Sub-plan: Steps 8 & 9] Depletion Probability & Path Count Increase
 
-- **What was implemented:**
-- **Approach & reasoning:** How it works. If there was a genuine choice
-  between two or more real approaches, note what else was considered
-  and why it was rejected. Skip the "alternatives" part for mechanical
-  steps where there wasn't really a decision to make.
-- **Deviations from PLAN.md** (or "none" — if there's a deviation,
-  explain what didn't hold up about the original plan, not just what
-  changed):
-- **Known issues / TODOs** (or "none"):
+- **What was implemented:** Increased Monte Carlo simulation path count from 500 to 1,000 for better statistical stability. Added depletion probability calculation (tracking `ever_depleted` per path) and display across `Results.jsx`, `Comparisons.jsx`, and `Live.jsx`. The metric is shown as a separate chart/line and a headline "success rate" percentage.
+- **Approach & reasoning:** Reused existing floor-at-zero logic to track depletion. Computed per-age depletion percentage across all 1,000 paths. Frontend conditionally renders the new chart and success rate box when `return_mode === 'monte_carlo'`. No architectural changes needed; purely additive to existing projection and UI code.
+- **Deviations from PLAN.md:** none
+- **Known issues / TODOs:** none

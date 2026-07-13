@@ -13,6 +13,8 @@ function Live() {
   const [saving, setSaving] = useState(false)
   const [expenditures, setExpenditures] = useState([])
   const [originalExpenditureIds, setOriginalExpenditureIds] = useState([])
+  const [incomes, setIncomes] = useState([])
+  const [originalIncomeIds, setOriginalIncomeIds] = useState([])
 
   useEffect(() => {
     fetch('/api/scenarios')
@@ -48,6 +50,15 @@ function Live() {
       }))
       setExpenditures(exps)
       setOriginalExpenditureIds(exps.map(e => e.id))
+      const incs = (scenario.incomes || []).map(i => ({
+        id: i.id,
+        startAge: i.start_age,
+        endAge: i.end_age,
+        amount: i.amount,
+        inflationAdjusted: !!i.inflation_adjusted
+      }))
+      setIncomes(incs)
+      setOriginalIncomeIds(incs.map(i => i.id))
       setResults([])
       setError('')
       setWarning('')
@@ -97,7 +108,17 @@ function Live() {
           inflation_adjusted: exp.inflationAdjusted ? 1 : 0
         }))
         
-      const payload = { ...formData, expenditures: validExpenditures }
+      // Filter and format incomes for backend
+      const validIncomes = incomes
+        .filter(inc => inc.startAge !== '' && inc.endAge !== '' && inc.amount !== '')
+        .map(inc => ({
+          start_age: parseFloat(inc.startAge),
+          end_age: parseFloat(inc.endAge),
+          amount: parseFloat(inc.amount) || 0,
+          inflation_adjusted: inc.inflationAdjusted ? 1 : 0
+        }))
+        
+      const payload = { ...formData, expenditures: validExpenditures, incomes: validIncomes }
       const res = await fetch('/api/projection/preview', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -163,6 +184,38 @@ function Live() {
         }
       }
 
+      // Sync incomes
+      const currentIncomeIds = incomes.map(i => i.id).filter(Boolean)
+      const deletedIncomeIds = originalIncomeIds.filter(id => !currentIncomeIds.includes(id))
+      
+      for (const id of deletedIncomeIds) {
+        await fetch(`/api/scenarios/${selectedId}/incomes/${id}`, { method: 'DELETE' })
+      }
+      
+      for (const inc of incomes) {
+        if (inc.startAge === '' || inc.endAge === '') continue
+        const body = {
+          start_age: parseFloat(inc.startAge),
+          end_age: parseFloat(inc.endAge),
+          amount: parseFloat(inc.amount) || 0,
+          inflation_adjusted: inc.inflationAdjusted ? 1 : 0
+        }
+        
+        if (inc.id) {
+          await fetch(`/api/scenarios/${selectedId}/incomes/${inc.id}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body)
+          })
+        } else {
+          await fetch(`/api/scenarios/${selectedId}/incomes`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body)
+          })
+        }
+      }
+
       const res = await fetch(`/api/scenarios/${selectedId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
@@ -195,6 +248,21 @@ function Live() {
 
   const removeExpenditure = (index) => {
     setExpenditures(expenditures.filter((_, i) => i !== index))
+  }
+
+  const addIncome = () => {
+    if (incomes.length >= 5) return
+    setIncomes([...incomes, { id: null, startAge: '', endAge: '', amount: 0, inflationAdjusted: false }])
+  }
+
+  const updateIncome = (index, field, value) => {
+    const updated = [...incomes]
+    updated[index] = { ...updated[index], [field]: value }
+    setIncomes(updated)
+  }
+
+  const removeIncome = (index) => {
+    setIncomes(incomes.filter((_, i) => i !== index))
   }
 
   const formatCurrency = (val) => {
@@ -336,6 +404,56 @@ function Live() {
               className="add-exp-btn"
             >
               + Add Expenditure
+            </button>
+          </div>
+
+          <div className="incomes-section" style={{ marginTop: '20px', paddingTop: '15px', borderTop: '1px solid #ddd' }}>
+            <h3>Extra Income</h3>
+            {incomes.map((inc, index) => (
+              <div key={index} className="expenditure-row">
+                <input
+                  type="number"
+                  step="0.01"
+                  value={inc.startAge}
+                  onChange={(e) => updateIncome(index, 'startAge', e.target.value)}
+                  placeholder="Start Age"
+                  className="exp-input"
+                />
+                <input
+                  type="number"
+                  step="0.01"
+                  value={inc.endAge}
+                  onChange={(e) => updateIncome(index, 'endAge', e.target.value)}
+                  placeholder="End Age"
+                  className="exp-input"
+                />
+                <input
+                  type="number"
+                  step="0.01"
+                  value={inc.amount}
+                  onChange={(e) => updateIncome(index, 'amount', parseFloat(e.target.value) || 0)}
+                  placeholder="Amount"
+                  className="exp-input"
+                />
+                <label className="exp-checkbox">
+                  <input
+                    type="checkbox"
+                    checked={inc.inflationAdjusted}
+                    onChange={(e) => updateIncome(index, 'inflationAdjusted', e.target.checked)}
+                  />
+                  Inflation Adj.
+                </label>
+                <button type="button" onClick={() => removeIncome(index)} className="delete-exp-btn" title="Delete">×</button>
+              </div>
+            ))}
+            <button
+              type="button"
+              onClick={addIncome}
+              disabled={incomes.length >= 5}
+              className="add-exp-btn"
+              style={{ marginTop: '8px' }}
+            >
+              + Add Income
             </button>
           </div>
 

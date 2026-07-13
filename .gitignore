@@ -1,6 +1,7 @@
 # Python
 __pycache__/
 *.pyc
+*.pyo
 .venv/
 venv/
 
@@ -11,6 +12,9 @@ dist/
 
 # Database
 retirement_planner.db
+
+# Uploaded files
+uploads/
 
 # Env/secrets
 .env

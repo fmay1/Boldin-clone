@@ -251,7 +251,6 @@ function Live() {
   }
 
   const addIncome = () => {
-    if (incomes.length >= 5) return
     setIncomes([...incomes, { id: null, startAge: '', endAge: '', amount: 0, inflationAdjusted: false }])
   }
 
@@ -449,7 +448,6 @@ function Live() {
             <button
               type="button"
               onClick={addIncome}
-              disabled={incomes.length >= 5}
               className="add-exp-btn"
               style={{ marginTop: '8px' }}
             >

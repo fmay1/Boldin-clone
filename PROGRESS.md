@@ -1,6 +1,6 @@
 # PROGRESS.md
 
-**Current state (read this first):** Monte Carlo simulation mode is fully implemented, including 1,000-path block bootstrap, percentile-based confidence intervals, and depletion probability tracking/display across Results, Comparisons, and Live views. All Build Order steps 1-13 and Monte Carlo sub-plan steps 1-9 are complete. Extra income (future income) feature is fully implemented in the Live tab, mirroring existing Scenarios tab functionality — incomes affect projection preview and sync to DB on save.
+**Current state (read this first):** Monte Carlo simulation mode is fully implemented, including 1,000-path block bootstrap, percentile-based confidence intervals, and depletion probability tracking/display across Results, Comparisons, and Live views. All Build Order steps 1-13 and Monte Carlo sub-plan steps 1-9 are complete. Extra income (future income) feature is fully implemented in the Live tab, mirroring existing Scenarios tab functionality — incomes affect projection preview and sync to DB on save. The Live tab's 5-income cap has been removed so incomes are uncapped in both tabs, matching PLAN.md step 14.
 
 ## How to use this file
 
@@ -16,6 +16,15 @@
 ---
 
 ## Log
+
+### [Fix] Remove Live tab's 5-income cap
+
+- **What was implemented:** Removed the 5-income cap from the Live tab (`Live.jsx` — deleted the guard in `addIncome` and the `disabled` state on the "+ Add Income" button). Incomes are now uncapped in both the Scenarios and Live tabs.
+- **Approach & reasoning:** PLAN.md step 14 explicitly says "no hard limit on count" for incomes; the 5-cap was an implementation choice in the Live tab (copied from the expenditure pattern) that the backend never enforced. The expenditure cap of 10 is unchanged — it is specified in PLAN.md step 11 and is consistent in both tabs.
+- **Deviations from PLAN.md:** none — this brings the code back in line with the plan.
+- **Known issues / TODOs:** none
+
+---
 
 ### [Monte Carlo Sub-plan: Steps 8 & 9] Depletion Probability & Path Count Increase
 

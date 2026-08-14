@@ -51,12 +51,12 @@ Prerequisites: Python and Node.js installed.
    - `cd frontend && npm install`
 2. Start: run `start.bat`, which opens the backend
    (`http://localhost:5000`) and the frontend dev server
-   (`http://localhost:3000`) in separate windows and opens the app in your
+   (`http://localhost:3001`) in separate windows and opens the app in your
    browser. Leave both windows open while using the app.
 3. Or manually, in two terminals:
    - `python backend/app.py`
    - `cd frontend && npm run dev`
-4. Open `http://localhost:3000`. "Backend Status: Backend is running"
+4. Open `http://localhost:3001`. "Backend Status: Backend is running"
    confirms the two halves are connected.
 
 ## Project layout

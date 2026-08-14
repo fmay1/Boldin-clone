@@ -10,7 +10,7 @@ start "Frontend" cmd /k "cd frontend && npm run dev"
 
 timeout /t 3 /nobreak >nul
 
-start http://localhost:3000
+start http://localhost:3001
 
 echo.
 echo Two windows just opened: one for the backend, one for the frontend.

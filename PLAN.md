@@ -252,6 +252,11 @@ Unless there's a specific, stated reason otherwise:
 
 ## 13. Future Ideas
 
+**Tackle before any new features** (items 4–5 of the upgrade recommendations; 1–3 are already done):
+
+4. A real test suite for projection.py: currently only 4 ad-hoc test files exist. The projection engine is the heart of the app, and your log shows it's where every subtle bug lived (monthly compounding, year-assignment, stdev). A small pytest suite with known-answer cases (e.g., your spreadsheet numbers) would catch regressions when you add features.
+5. Export/backup: the DB holds real financial data and is git-ignored with no backup path. A "download results as CSV" and/or "download DB backup" endpoint is cheap insurance.
+
 - Local LLM integration (Qwen models on a separate machine) to ask questions about the plan
 - Bank/brokerage account linking for automatic balance updates
 - Tax-bracket-aware withdrawal optimization (replacing the fixed percentage split)

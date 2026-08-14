@@ -1,6 +1,6 @@
 # PROGRESS.md
 
-**Current state (read this first):** Monte Carlo simulation mode is fully implemented, including 1,000-path block bootstrap, percentile-based confidence intervals, and depletion probability tracking/display across Results, Comparisons, and Live views. All Build Order steps 1-13 and Monte Carlo sub-plan steps 1-9 are complete. Extra income (future income) feature is fully implemented in the Live tab, mirroring existing Scenarios tab functionality — incomes affect projection preview and sync to DB on save. The Live tab's 5-income cap has been removed so incomes are uncapped in both tabs, matching PLAN.md step 14.
+**Current state (read this first):** Monte Carlo simulation mode is fully implemented, including 1,000-path block bootstrap, percentile-based confidence intervals, and depletion probability tracking/display across Results, Comparisons, and Live views. All Build Order steps 1-13 and Monte Carlo sub-plan steps 1-9 are complete. Extra income (future income) feature is fully implemented in the Live tab, mirroring existing Scenarios tab functionality — incomes affect projection preview and sync to DB on save. The Live tab's 5-income cap has been removed so incomes are uncapped in both tabs, matching PLAN.md step 14. Scenario input validation is consolidated in a shared `validate_scenario()` function in app.py, used by the create, update, and preview endpoints.
 
 ## How to use this file
 
@@ -16,6 +16,16 @@
 ---
 
 ## Log
+
+### [Refactor] Shared validate_scenario() for create/update/preview
+
+- **What was implemented:** Extracted the ~60 lines of duplicated scenario validation from the create, update, and preview endpoints in `app.py` into one `validate_scenario()` function (plus a `VALID_RETURN_MODES` constant). All three endpoints call it, and their SQL now uses the type-coerced values it returns. Added `backend/test_validate_scenario.py` (24 cases, plain-Python style matching the existing tests) and verified all three endpoints end-to-end via Flask's test client against a throwaway database.
+- **Behavior changes (all strict improvements):** (1) Unknown `return_mode` on create/update previously hit the SQLite CHECK constraint → unhandled → 500; now a 400 with a clear message. (2) Missing core fields (e.g. `current_age`) on create/update previously 500'd; now a 400. (3) `return_start_year > return_end_year` on the preview endpoint was previously caught deep in `calculate_projection` with a different message; now caught at the API layer with the same message as create/update.
+- **Approach & reasoning:** The duplication had already caused drift twice — the Decisions Log records the preview endpoint missing the monthly-precision check, and a pre-refactor audit found preview had no start>end year check at all. One function means a rule change is one edit. The `name` check stays in create/update (preview doesn't persist). Existing error message strings kept verbatim since the frontend displays them.
+- **Deviations from PLAN.md:** none
+- **Known issues / TODOs:** Frontend validation copies (Scenarios.jsx/Live.jsx) deliberately left alone — they're a UX layer; the backend is the enforcement layer.
+
+---
 
 ### [Fix] Remove Live tab's 5-income cap
 

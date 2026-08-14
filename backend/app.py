@@ -158,6 +158,90 @@ def upload_annual_returns():
 
 # --- Scenario CRUD Routes ---
 
+VALID_RETURN_MODES = ('mean_stdev', 'historical_replay', 'monte_carlo')
+
+def validate_scenario(data, cursor):
+    """
+    Validates the scenario parameters shared by the create, update, and
+    preview endpoints. Returns (parsed, None) if valid, or (None,
+    error_message) if not. `parsed` holds the type-coerced values the
+    endpoints use in their SQL. `name` is checked by callers that persist,
+    since preview doesn't save.
+    """
+    try:
+        current_age = float(data['current_age'])
+        retirement_age = float(data['retirement_age'])
+        end_age = int(data['end_age'])
+        expenses = float(data['expected_expenses_in_retirement'])
+        withdrawal_split = float(data['withdrawal_split_pretax_pct'])
+        inflation = float(data['inflation_rate_pct'])
+        return_mode = data['return_mode']
+    except (ValueError, TypeError, KeyError):
+        return None, "Invalid numeric values for ages, expenses, or rates"
+
+    # Validate monthly precision for current_age and retirement_age
+    if abs((current_age * 12) - round(current_age * 12)) > 1e-9:
+        return None, "Current age must correspond to a whole number of months (e.g., 46.25)"
+    if abs((retirement_age * 12) - round(retirement_age * 12)) > 1e-9:
+        return None, "Retirement age must correspond to a whole number of months (e.g., 46.25)"
+
+    if current_age >= retirement_age or retirement_age >= end_age:
+        return None, "Ages must be ordered: current < retirement < end"
+
+    if not (0 <= withdrawal_split <= 100):
+        return None, "Withdrawal split must be between 0 and 100"
+
+    if not (-5 <= inflation <= 20):
+        return None, "Inflation rate must be between -5 and 20"
+
+    if return_mode not in VALID_RETURN_MODES:
+        return None, "Return mode must be one of: mean_stdev, historical_replay, monte_carlo"
+
+    cursor.execute("SELECT MIN(year), MAX(year) FROM annual_returns")
+    min_year, max_year = cursor.fetchone()
+
+    if min_year is None:
+        return None, "No annual return data available"
+
+    parsed = {
+        "current_age": current_age,
+        "retirement_age": retirement_age,
+        "end_age": end_age,
+        "expenses": expenses,
+        "withdrawal_split": withdrawal_split,
+        "inflation": inflation,
+        "return_mode": return_mode,
+        "return_start_year": None,
+        "return_end_year": None,
+        "replay_start_year": None,
+        "block_length_years": None
+    }
+
+    try:
+        if return_mode in ('mean_stdev', 'monte_carlo'):
+            start_year = int(data['return_start_year'])
+            end_year = int(data['return_end_year']) if data.get('return_end_year') is not None else None
+            if end_year is not None and start_year > end_year:
+                return None, "Return start year must be <= end year"
+            if start_year < min_year or (end_year is not None and end_year > max_year):
+                return None, f"Return year range must be within {min_year}-{max_year}"
+            parsed["return_start_year"] = start_year
+            parsed["return_end_year"] = end_year
+            if return_mode == 'monte_carlo':
+                block_len = int(data['block_length_years'])
+                if block_len <= 0:
+                    return None, "Block length must be > 0"
+                parsed["block_length_years"] = block_len
+        elif return_mode == 'historical_replay':
+            replay_year = int(data['replay_start_year'])
+            if replay_year < min_year or replay_year > max_year:
+                return None, f"Replay start year must be within {min_year}-{max_year}"
+            parsed["replay_start_year"] = replay_year
+    except (ValueError, TypeError, KeyError):
+        return None, "Missing or invalid year field for the selected return mode"
+
+    return parsed, None
+
 @app.route('/api/scenarios', methods=['GET'])
 def get_scenarios():
     conn = get_connection()
@@ -206,107 +290,23 @@ def create_scenario():
     if not data.get('name'):
         conn.close()
         return jsonify({"error": "Name is required"}), 400
-    
-    try:
-        current_age = float(data['current_age'])
-        retirement_age = float(data['retirement_age'])
-        end_age = int(data['end_age'])
-        expenses = float(data['expected_expenses_in_retirement'])
-        withdrawal_split = float(data['withdrawal_split_pretax_pct'])
-        inflation = float(data['inflation_rate_pct'])
-        return_mode = data['return_mode']
-    except (ValueError, TypeError):
-        conn.close()
-        return jsonify({"error": "Invalid numeric values for ages, expenses, or rates"}), 400
 
-    # Validate monthly precision for current_age and retirement_age
-    if abs((current_age * 12) - round(current_age * 12)) > 1e-9:
+    parsed, error = validate_scenario(data, cursor)
+    if error:
         conn.close()
-        return jsonify({"error": "Current age must correspond to a whole number of months (e.g., 46.25)"}), 400
-    if abs((retirement_age * 12) - round(retirement_age * 12)) > 1e-9:
-        conn.close()
-        return jsonify({"error": "Retirement age must correspond to a whole number of months (e.g., 46.25)"}), 400
-
-    if current_age >= retirement_age or retirement_age >= end_age:
-        conn.close()
-        return jsonify({"error": "Ages must be ordered: current < retirement < end"}), 400
-    
-    if not (0 <= withdrawal_split <= 100):
-        conn.close()
-        return jsonify({"error": "Withdrawal split must be between 0 and 100"}), 400
-        
-    if not (-5 <= inflation <= 20):
-        conn.close()
-        return jsonify({"error": "Inflation rate must be between -5 and 20"}), 400
-
-    try:
-        if return_mode == 'mean_stdev':
-            start_year = int(data['return_start_year'])
-            end_year = int(data['return_end_year']) if data.get('return_end_year') is not None else None
-            if start_year is not None and end_year is not None and start_year > end_year:
-                conn.close()
-                return jsonify({"error": "Return start year must be <= end year"}), 400
-                
-            cursor.execute("SELECT MIN(year), MAX(year) FROM annual_returns")
-            min_year, max_year = cursor.fetchone()
-            
-            if min_year is None:
-                conn.close()
-                return jsonify({"error": "No annual return data available"}), 400
-                
-            if start_year < min_year or (end_year is not None and end_year > max_year):
-                conn.close()
-                return jsonify({"error": f"Return year range must be within {min_year}-{max_year}"}), 400
-                
-        elif return_mode == 'historical_replay':
-            replay_year = int(data['replay_start_year'])
-            cursor.execute("SELECT MIN(year), MAX(year) FROM annual_returns")
-            min_year, max_year = cursor.fetchone()
-            
-            if min_year is None:
-                conn.close()
-                return jsonify({"error": "No annual return data available"}), 400
-                
-            if replay_year < min_year or replay_year > max_year:
-                conn.close()
-                return jsonify({"error": f"Replay start year must be within {min_year}-{max_year}"}), 400
-                
-        elif return_mode == 'monte_carlo':
-            start_year = int(data['return_start_year'])
-            end_year = int(data['return_end_year']) if data.get('return_end_year') is not None else None
-            block_len = int(data['block_length_years'])
-            if start_year is not None and end_year is not None and start_year > end_year:
-                conn.close()
-                return jsonify({"error": "Return start year must be <= end year"}), 400
-            if block_len <= 0:
-                conn.close()
-                return jsonify({"error": "Block length must be > 0"}), 400
-                
-            cursor.execute("SELECT MIN(year), MAX(year) FROM annual_returns")
-            min_year, max_year = cursor.fetchone()
-            
-            if min_year is None:
-                conn.close()
-                return jsonify({"error": "No annual return data available"}), 400
-                
-            if start_year < min_year or (end_year is not None and end_year > max_year):
-                conn.close()
-                return jsonify({"error": f"Return year range must be within {min_year}-{max_year}"}), 400
-    except (ValueError, TypeError, KeyError):
-        conn.close()
-        return jsonify({"error": "Missing or invalid year field for the selected return mode"}), 400
+        return jsonify({"error": error}), 400
 
     cursor.execute(
-        """INSERT INTO scenarios 
-           (name, current_age, retirement_age, end_age, expected_expenses_in_retirement, 
-            withdrawal_split_pretax_pct, inflation_rate_pct, return_mode, 
+        """INSERT INTO scenarios
+           (name, current_age, retirement_age, end_age, expected_expenses_in_retirement,
+            withdrawal_split_pretax_pct, inflation_rate_pct, return_mode,
             return_start_year, return_end_year, replay_start_year, block_length_years)
            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
         (
-            data['name'], current_age, retirement_age, end_age, expenses,
-            withdrawal_split, inflation, return_mode,
-            data.get('return_start_year'), data.get('return_end_year'), data.get('replay_start_year'),
-            data.get('block_length_years')
+            data['name'], parsed["current_age"], parsed["retirement_age"], parsed["end_age"], parsed["expenses"],
+            parsed["withdrawal_split"], parsed["inflation"], parsed["return_mode"],
+            parsed["return_start_year"], parsed["return_end_year"], parsed["replay_start_year"],
+            parsed["block_length_years"]
         )
     )
     conn.commit()
@@ -333,112 +333,28 @@ def update_scenario(scenario_id):
     conn = get_connection()
     cursor = conn.cursor()
 
-    # Validation (same as create)
+    # Validation (shared with create and preview)
     if not data.get('name'):
         conn.close()
         return jsonify({"error": "Name is required"}), 400
-    
-    try:
-        current_age = float(data['current_age'])
-        retirement_age = float(data['retirement_age'])
-        end_age = int(data['end_age'])
-        expenses = float(data['expected_expenses_in_retirement'])
-        withdrawal_split = float(data['withdrawal_split_pretax_pct'])
-        inflation = float(data['inflation_rate_pct'])
-        return_mode = data['return_mode']
-    except (ValueError, TypeError):
-        conn.close()
-        return jsonify({"error": "Invalid numeric values for ages, expenses, or rates"}), 400
 
-    # Validate monthly precision for current_age and retirement_age
-    if abs((current_age * 12) - round(current_age * 12)) > 1e-9:
+    parsed, error = validate_scenario(data, cursor)
+    if error:
         conn.close()
-        return jsonify({"error": "Current age must correspond to a whole number of months (e.g., 46.25)"}), 400
-    if abs((retirement_age * 12) - round(retirement_age * 12)) > 1e-9:
-        conn.close()
-        return jsonify({"error": "Retirement age must correspond to a whole number of months (e.g., 46.25)"}), 400
-
-    if current_age >= retirement_age or retirement_age >= end_age:
-        conn.close()
-        return jsonify({"error": "Ages must be ordered: current < retirement < end"}), 400
-    
-    if not (0 <= withdrawal_split <= 100):
-        conn.close()
-        return jsonify({"error": "Withdrawal split must be between 0 and 100"}), 400
-        
-    if not (-5 <= inflation <= 20):
-        conn.close()
-        return jsonify({"error": "Inflation rate must be between -5 and 20"}), 400
-
-    try:
-        if return_mode == 'mean_stdev':
-            start_year = int(data['return_start_year'])
-            end_year = int(data['return_end_year']) if data.get('return_end_year') is not None else None
-            if start_year is not None and end_year is not None and start_year > end_year:
-                conn.close()
-                return jsonify({"error": "Return start year must be <= end year"}), 400
-                
-            cursor.execute("SELECT MIN(year), MAX(year) FROM annual_returns")
-            min_year, max_year = cursor.fetchone()
-            
-            if min_year is None:
-                conn.close()
-                return jsonify({"error": "No annual return data available"}), 400
-                
-            if start_year < min_year or (end_year is not None and end_year > max_year):
-                conn.close()
-                return jsonify({"error": f"Return year range must be within {min_year}-{max_year}"}), 400
-                
-        elif return_mode == 'historical_replay':
-            replay_year = int(data['replay_start_year'])
-            cursor.execute("SELECT MIN(year), MAX(year) FROM annual_returns")
-            min_year, max_year = cursor.fetchone()
-            
-            if min_year is None:
-                conn.close()
-                return jsonify({"error": "No annual return data available"}), 400
-                
-            if replay_year < min_year or replay_year > max_year:
-                conn.close()
-                return jsonify({"error": f"Replay start year must be within {min_year}-{max_year}"}), 400
-                
-        elif return_mode == 'monte_carlo':
-            start_year = int(data['return_start_year'])
-            end_year = int(data['return_end_year']) if data.get('return_end_year') is not None else None
-            block_len = int(data['block_length_years'])
-            if start_year is not None and end_year is not None and start_year > end_year:
-                conn.close()
-                return jsonify({"error": "Return start year must be <= end year"}), 400
-            if block_len <= 0:
-                conn.close()
-                return jsonify({"error": "Block length must be > 0"}), 400
-                
-            cursor.execute("SELECT MIN(year), MAX(year) FROM annual_returns")
-            min_year, max_year = cursor.fetchone()
-            
-            if min_year is None:
-                conn.close()
-                return jsonify({"error": "No annual return data available"}), 400
-                
-            if start_year < min_year or (end_year is not None and end_year > max_year):
-                conn.close()
-                return jsonify({"error": f"Return year range must be within {min_year}-{max_year}"}), 400
-    except (ValueError, TypeError, KeyError):
-        conn.close()
-        return jsonify({"error": "Missing or invalid year field for the selected return mode"}), 400
+        return jsonify({"error": error}), 400
 
     cursor.execute(
-        """UPDATE scenarios SET 
-           name = ?, current_age = ?, retirement_age = ?, end_age = ?, 
-           expected_expenses_in_retirement = ?, withdrawal_split_pretax_pct = ?, 
-           inflation_rate_pct = ?, return_mode = ?, return_start_year = ?, 
+        """UPDATE scenarios SET
+           name = ?, current_age = ?, retirement_age = ?, end_age = ?,
+           expected_expenses_in_retirement = ?, withdrawal_split_pretax_pct = ?,
+           inflation_rate_pct = ?, return_mode = ?, return_start_year = ?,
            return_end_year = ?, replay_start_year = ?, block_length_years = ?
            WHERE id = ?""",
         (
-            data['name'], current_age, retirement_age, end_age, expenses,
-            withdrawal_split, inflation, return_mode,
-            data.get('return_start_year'), data.get('return_end_year'), data.get('replay_start_year'),
-            data.get('block_length_years'),
+            data['name'], parsed["current_age"], parsed["retirement_age"], parsed["end_age"], parsed["expenses"],
+            parsed["withdrawal_split"], parsed["inflation"], parsed["return_mode"],
+            parsed["return_start_year"], parsed["return_end_year"], parsed["replay_start_year"],
+            parsed["block_length_years"],
             scenario_id
         )
     )
@@ -725,31 +641,6 @@ def preview_projection():
     data = request.get_json()
     if not data:
         return jsonify({"error": "Invalid JSON"}), 400
-        
-    # Basic validation
-    try:
-        current_age = float(data['current_age'])
-        retirement_age = float(data['retirement_age'])
-        end_age = int(data['end_age'])
-        expenses = float(data['expected_expenses_in_retirement'])
-        withdrawal_split = float(data['withdrawal_split_pretax_pct'])
-        inflation = float(data['inflation_rate_pct'])
-        return_mode = data['return_mode']
-    except (ValueError, TypeError, KeyError):
-        return jsonify({"error": "Invalid numeric values or missing fields"}), 400
-
-    # Validate monthly precision for current_age and retirement_age
-    if abs((current_age * 12) - round(current_age * 12)) > 1e-9:
-        return jsonify({"error": "Current age must correspond to a whole number of months (e.g., 46.25)"}), 400
-    if abs((retirement_age * 12) - round(retirement_age * 12)) > 1e-9:
-        return jsonify({"error": "Retirement age must correspond to a whole number of months (e.g., 46.25)"}), 400
-
-    if current_age >= retirement_age or retirement_age >= end_age:
-        return jsonify({"error": "Ages must be ordered: current < retirement < end"}), 400
-    if not (0 <= withdrawal_split <= 100):
-        return jsonify({"error": "Withdrawal split must be between 0 and 100"}), 400
-    if not (-5 <= inflation <= 20):
-        return jsonify({"error": "Inflation rate must be between -5 and 20"}), 400
 
     conn = get_connection()
     cursor = conn.cursor()
@@ -758,41 +649,19 @@ def preview_projection():
     if not accounts:
         conn.close()
         return jsonify({"error": "No accounts found."}), 400
-        
+
     cursor.execute("SELECT year, return_pct FROM annual_returns ORDER BY year")
     annual_returns = cursor.fetchall()
     if not annual_returns:
         conn.close()
         return jsonify({"error": "No annual return data found."}), 400
-        
-    min_year, max_year = cursor.execute("SELECT MIN(year), MAX(year) FROM annual_returns").fetchone()
-    
-    try:
-        if return_mode == 'mean_stdev':
-            start_year = int(data['return_start_year'])
-            end_year = int(data['return_end_year']) if data.get('return_end_year') else max_year
-            if start_year < min_year or end_year > max_year:
-                conn.close()
-                return jsonify({"error": f"Return year range must be within {min_year}-{max_year}"}), 400
-        elif return_mode == 'historical_replay':
-            replay_year = int(data['replay_start_year'])
-            if replay_year < min_year or replay_year > max_year:
-                conn.close()
-                return jsonify({"error": f"Replay start year must be within {min_year}-{max_year}"}), 400
-        elif return_mode == 'monte_carlo':
-            start_year = int(data['return_start_year'])
-            end_year = int(data['return_end_year']) if data.get('return_end_year') else max_year
-            block_len = int(data['block_length_years'])
-            if start_year < min_year or end_year > max_year:
-                conn.close()
-                return jsonify({"error": f"Return year range must be within {min_year}-{max_year}"}), 400
-            if block_len <= 0:
-                conn.close()
-                return jsonify({"error": "Block length must be > 0"}), 400
-    except (ValueError, TypeError, KeyError):
+
+    # Validation (shared with create and update)
+    parsed, error = validate_scenario(data, cursor)
+    if error:
         conn.close()
-        return jsonify({"error": "Missing or invalid year field for the selected return mode"}), 400
-            
+        return jsonify({"error": error}), 400
+
     conn.close()
     
     accounts_list = [dict(a) for a in accounts]

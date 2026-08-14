@@ -25,3 +25,7 @@ Thumbs.db
 
 # Aider
 .aider*
+
+# Local files
+opencode.json
+start.bat - Shortcut.lnk
